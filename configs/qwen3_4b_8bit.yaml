@@ -1,0 +1,7 @@
+model: mlx-community/Qwen3-4B-8bit
+adapter_file: outputs/adapters/adapters_qwen3_4b_8bit.npz
+batch_size: 1
+lora_layers: 4
+train_iters: 600
+eval_test_batches: 20
+eval_max_new_tokens: 32

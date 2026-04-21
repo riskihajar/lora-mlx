@@ -1,0 +1,6 @@
+model: mlx_model
+adapter_file: outputs/adapters/adapters_tinyllama.npz
+batch_size: 1
+lora_layers: 4
+train_iters: 600
+eval_test_batches: 100

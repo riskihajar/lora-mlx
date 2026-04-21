@@ -1,0 +1,9 @@
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATA_DIR = REPO_ROOT / "data"
+DEFAULT_OUTPUTS_DIR = REPO_ROOT / "outputs"
+DEFAULT_ADAPTERS_DIR = DEFAULT_OUTPUTS_DIR / "adapters"
+DEFAULT_PREDICTIONS_DIR = DEFAULT_OUTPUTS_DIR / "predictions"
+DEFAULT_MODELS_DIR = DEFAULT_OUTPUTS_DIR / "models"

@@ -1,0 +1,14 @@
+__pycache__/
+.DS_Store
+.pytest_cache/
+.venv/
+
+outputs/
+data/
+
+*.npz
+*.safetensors
+*.jsonl
+
+mlx_model/
+mlx_model_*/
