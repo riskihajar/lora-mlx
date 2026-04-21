@@ -52,3 +52,10 @@ source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.export --help
 - adapters: `outputs/adapters/`
 - predictions: `outputs/predictions/`
 - converted models: `outputs/models/`
+
+## Output Convention
+
+- training checkpoints should go into `outputs/adapters/`
+- prediction exports should go into `outputs/predictions/`
+- converted or fused MLX models should go into `outputs/models/`
+- long-form analysis documents should stay in `docs/`

@@ -11,7 +11,7 @@ from . import utils
 from .models import LoRALinear
 from .paths import DEFAULT_ADAPTERS_DIR, DEFAULT_MODELS_DIR
 
-if __name__ == "__main__":
+def build_parser():
     parser = argparse.ArgumentParser(description="LoRA or QLoRA finetuning.")
     parser.add_argument(
         "--model",
@@ -50,9 +50,14 @@ if __name__ == "__main__":
         help="Generate a de-quantized model.",
         action="store_true",
     )
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
 
     print("Loading pretrained model")
-    args = parser.parse_args()
 
     model, tokenizer, config = utils.load(args.model)
 
@@ -114,3 +119,7 @@ if __name__ == "__main__":
                 "Must provide original Hugging Face repo to upload local model."
             )
         utils.upload_to_hub(args.save_path, args.upload_name, hf_path)
+
+
+if __name__ == "__main__":
+    main()
