@@ -2,6 +2,6 @@ model: mlx-community/gemma-4-e4b-it-4bit
 adapter_file: outputs/adapters/adapters_gemma4_e4b_4bit.npz
 batch_size: 1
 lora_layers: 4
-train_iters: 300
+train_iters: 1000
 eval_test_batches: 10
 eval_max_new_tokens: 32

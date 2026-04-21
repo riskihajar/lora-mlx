@@ -2,5 +2,5 @@ model: mlx_model_mistral_q4
 adapter_file: outputs/adapters/adapters_mistral_q4.npz
 batch_size: 1
 lora_layers: 4
-train_iters: 600
+train_iters: 1000
 eval_test_batches: 100
