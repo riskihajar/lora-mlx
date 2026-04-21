@@ -22,6 +22,15 @@ from .paths import DEFAULT_ADAPTERS_DIR, DEFAULT_DATA_DIR
 sys.stdout = os.fdopen(sys.stdout.fileno(), "w", buffering=1)
 
 
+def apply_lora_layers(model, lora_layers):
+    target_layers = model.model.layers[len(model.model.layers) - lora_layers :]
+    for layer in target_layers:
+        layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
+        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        if hasattr(layer, "block_sparse_moe"):
+            layer.block_sparse_moe.gate = LoRALinear.from_linear(layer.block_sparse_moe.gate)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="LoRA or QLoRA finetuning.")
     parser.add_argument(
@@ -343,11 +352,7 @@ if __name__ == "__main__":
     model, tokenizer, _ = lora_utils.load(args.model, tokenizer_config)
     # Freeze all layers other than LORA linears
     model.freeze()
-    for l in model.model.layers[len(model.model.layers) - args.lora_layers :]:
-        l.self_attn.q_proj = LoRALinear.from_linear(l.self_attn.q_proj)
-        l.self_attn.v_proj = LoRALinear.from_linear(l.self_attn.v_proj)
-        if hasattr(l, "block_sparse_moe"):
-            l.block_sparse_moe.gate = LoRALinear.from_linear(l.block_sparse_moe.gate)
+    apply_lora_layers(model, args.lora_layers)
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     print(f"Total parameters {p:.3f}M")

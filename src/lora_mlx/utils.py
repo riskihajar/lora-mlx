@@ -143,6 +143,20 @@ def load(path_or_hf_repo: str, tokenizer_config={}):
         config = json.loads(f.read())
         quantization = config.get("quantization", None)
 
+    text_only_prefix = None
+    model_config = config
+    if config.get("model_type") == "gemma4" and "text_config" in config:
+        model_config = dict(config["text_config"])
+        model_config["model_type"] = "gemma4"
+        model_config["tie_word_embeddings"] = config.get(
+            "tie_word_embeddings", model_config.get("tie_word_embeddings", False)
+        )
+        model_config["quantization"] = quantization
+        model_config["final_logit_softcapping"] = model_config.get(
+            "final_logit_softcapping"
+        )
+        text_only_prefix = "language_model."
+
     weight_files = glob.glob(str(model_path / "*.safetensors"))
     if len(weight_files) == 0:
         raise FileNotFoundError("No safetensors found in {}".format(model_path))
@@ -151,7 +165,14 @@ def load(path_or_hf_repo: str, tokenizer_config={}):
     for wf in weight_files:
         weights.update(mx.load(wf).items())
 
-    model_args = models.ModelArgs.from_dict(config)
+    if text_only_prefix is not None:
+        weights = {
+            k[len(text_only_prefix) :]: v
+            for k, v in weights.items()
+            if k.startswith(text_only_prefix)
+        }
+
+    model_args = models.ModelArgs.from_dict(model_config)
     model = models.Model(model_args)
     if quantization is not None:
         class_predicate = (
@@ -170,7 +191,7 @@ def load(path_or_hf_repo: str, tokenizer_config={}):
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_path, **tokenizer_config
     )
-    return model, tokenizer, config
+    return model, tokenizer, model_config
 
 
 def generate(

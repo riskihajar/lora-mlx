@@ -29,6 +29,7 @@ outputs/           generated artifacts (models, adapters, predictions)
 - TinyLlama baseline experiments
 - Mistral q4 QLoRA experiments
 - Qwen3 compatibility patching and experiments
+- Gemma 4 text-only compatibility work
 
 ## Notes
 

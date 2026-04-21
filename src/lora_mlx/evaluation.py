@@ -11,6 +11,16 @@ from .models import LoRALinear
 from .paths import DEFAULT_ADAPTERS_DIR, DEFAULT_DATA_DIR
 
 
+def apply_lora_layers(model, lora_layers):
+    for layer in model.model.layers[len(model.model.layers) - lora_layers :]:
+        layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
+        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        if hasattr(layer, "block_sparse_moe"):
+            layer.block_sparse_moe.gate = LoRALinear.from_linear(
+                layer.block_sparse_moe.gate
+            )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Evaluate EM and F1 for WikiSQL-style data.")
     parser.add_argument("--model", required=True, help="Path to local MLX model or HF repo")
@@ -56,13 +66,7 @@ def prepare_model(model_path, adapter_file=None, lora_layers=4):
     model, tokenizer, _ = lora_utils.load(model_path)
     if adapter_file is not None:
         model.freeze()
-        for layer in model.model.layers[len(model.model.layers) - lora_layers :]:
-            layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
-            layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
-            if hasattr(layer, "block_sparse_moe"):
-                layer.block_sparse_moe.gate = LoRALinear.from_linear(
-                    layer.block_sparse_moe.gate
-                )
+        apply_lora_layers(model, lora_layers)
         model.load_weights(adapter_file, strict=False)
     model.eval()
     return model, tokenizer

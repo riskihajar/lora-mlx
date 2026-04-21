@@ -11,6 +11,14 @@ from . import utils
 from .models import LoRALinear
 from .paths import DEFAULT_ADAPTERS_DIR, DEFAULT_MODELS_DIR
 
+
+def apply_lora_layers(model, lora_layers):
+    for layer in model.model.layers[len(model.model.layers) - lora_layers :]:
+        layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
+        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        if hasattr(layer, "block_sparse_moe"):
+            layer.block_sparse_moe.gate = LoRALinear.from_linear(layer.block_sparse_moe.gate)
+
 def build_parser():
     parser = argparse.ArgumentParser(description="LoRA or QLoRA finetuning.")
     parser.add_argument(
@@ -67,11 +75,7 @@ def main():
 
     # Freeze all layers other than LORA linears
     model.freeze()
-    for l in model.model.layers[len(model.model.layers) - lora_layers :]:
-        l.self_attn.q_proj = LoRALinear.from_linear(l.self_attn.q_proj)
-        l.self_attn.v_proj = LoRALinear.from_linear(l.self_attn.v_proj)
-        if hasattr(l, "block_sparse_moe"):
-            l.block_sparse_moe.gate = LoRALinear.from_linear(l.block_sparse_moe.gate)
+    apply_lora_layers(model, lora_layers)
 
     model.update(tree_unflatten(adapters))
     fused_linears = [

@@ -198,6 +198,34 @@ When using `mlx-community/Qwen3-4B-8bit`, the embedding layer is a `QuantizedEmb
 
 That means the tied output projection cannot directly use `embed_tokens.weight.T` as if it were dense FP weights. The code had to dequantize the embedding weights first before computing logits.
 
+## Gemma 4 Compatibility Notes
+
+Support was added for `mlx-community/gemma-4-e4b-it-4bit` as a text-only path.
+
+What was added:
+
+- nested `text_config` parsing from Gemma 4 multimodal config
+- weight prefix remapping from `language_model.*`
+- Gemma 4 text decoder path with:
+  - `q_norm`, `k_norm`, `v_norm`
+  - GELU-tanh style gated MLP
+  - per-layer input branch
+  - tied embedding output logits
+  - final logit softcapping
+
+Important limitations:
+
+- this repo still does not support Gemma 4 audio/vision paths
+- the implementation is intended for text-only finetuning and evaluation
+- the attention implementation is compatible enough to load and train, but it is not a full reproduction of every Hugging Face Gemma 4 attention detail
+
+Sanity checks completed:
+
+- model load succeeded for `mlx-community/gemma-4-e4b-it-4bit`
+- single forward pass succeeded
+- one training iteration succeeded and adapter weights were saved
+- adapter reload through evaluation succeeded
+
 ## Pain Points and Important Caveats
 
 ### 1. This repo is not a general model loader
