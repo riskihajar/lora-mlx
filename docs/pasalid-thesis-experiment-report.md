@@ -69,6 +69,40 @@ Interpretation:
 - `C` continues to improve over `A`, which supports the internalization direction.
 - the adapter-only condition does not yet match the context condition, but it closes part of the gap.
 
+### Legal-aware metrics on a `10` example seen subset
+
+To reduce over-reliance on strict EM, the same TinyLlama A/B/C comparison was also read through legal-aware metrics.
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.3003 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.4058 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.3577 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- The legal-aware `answer_f1` result reinforces the same ordering seen in the generic metric run: `B > C > A`.
+- `EM` remains uniformly zero, which supports the decision to keep `EM` only as a strict auxiliary metric.
+- Citation metrics are still zero because the current generated answers often fail to produce a parsable source reference even when part of the answer content is directionally useful.
+- This confirms that answer quality is improving faster than source-traceability quality, so citation formatting and source-attribution behavior still need targeted improvement.
+
+### Refined QA-bank legal-aware check on a `10` example seen subset
+
+After tightening the QA generation prompt so that answers should end with an exact `Sumber:` line, the TinyLlama A/B/C comparison was rerun on a refined split.
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.2569 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.3840 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.2663 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- The refined QA style preserves the same broad ordering: `B > C > A`.
+- The adapter condition still improves slightly over the no-context baseline, though the gap is smaller on the refined subset.
+- Citation metrics remain zero, which indicates that the main bottleneck is no longer only QA-bank formatting; the model itself is still not reliably reproducing the required citation style at inference time.
+- This is an important result for the thesis because it separates two phenomena: partial answer internalization is visible, but source-attribution behavior is still weak.
+
 ## Mistral q4 Baseline
 
 ### Early status
@@ -188,6 +222,7 @@ Additional failure note:
 - the current TinyLlama run is a first baseline, not the final adapter result for the study
 - the current Mistral q4 adapter run is only a short baseline pass and should not be treated as the final Mistral result
 - the Qwen3 unseen-split comparison still needs a smaller or more staged evaluation run to complete reliably
+- even after tightening the gold-answer style, citation metrics remain zero on the refined TinyLlama legal-aware check
 - the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step
@@ -195,3 +230,8 @@ Additional failure note:
 1. refine the QA bank and answer style to reduce variability and improve traceable evidence format
 2. complete a staged unseen-split evaluation for Qwen3 so all three conditions are available on both seen and unseen splits
 3. only continue extending Mistral if the refined QA format suggests it can close the remaining gap
+
+Refined follow-up direction:
+
+- keep the current finding that answer quality and source traceability are currently separating
+- test whether a more explicitly structured output format can improve citation metrics without losing answer quality
