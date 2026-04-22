@@ -33,7 +33,7 @@
 - Model: `mlx-community/gemma-4-e4b-it-4bit`
 - Loaded directly from Hugging Face MLX community
 - Quantization: 4-bit MLX community release
-- Status: text-only loading, training, and perplexity evaluation work in this repo; full generative evaluation still times out
+- Status: text-only loading, training, perplexity evaluation, and full EM/F1 evaluation now work in this repo, but output quality remains poor on this task
 
 ### Training configuration
 
@@ -45,6 +45,7 @@
 - Adapter output: `outputs/adapters/adapters_tinyllama.npz`
 - Mistral q4 adapter output: `outputs/adapters/adapters_mistral_q4.npz`
 - Qwen3 adapter output: `outputs/adapters/adapters_qwen3_4b_8bit.npz`
+- Gemma 4 adapter output: `outputs/adapters/adapters_gemma4_e4b_4bit.npz`
 
 ## What LoRA Changes in This Repo
 
@@ -99,10 +100,10 @@ These are lexical metrics, not SQL execution accuracy.
 | Model | Iterations | Test Loss | Test PPL | EM | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Base TinyLlama | 0 | N/A | N/A | 0.0000 | 0.1089 |
-| Base Mistral q4 | 0 | N/A | N/A | 0.0000 | 0.1394 |
-| Base Qwen3 4B 8bit | 0 | N/A | N/A | 0.0000 | 0.1561 |
 | TinyLlama + LoRA | 1000 | 1.676 | 5.343 | 0.0000 | 0.3135 |
+| Base Mistral q4 | 0 | N/A | N/A | 0.0000 | 0.1394 |
 | Mistral q4 + QLoRA | 1000 | 1.561 | 4.765 | 0.1600 | 0.4467 |
+| Base Qwen3 4B 8bit | 0 | N/A | N/A | 0.0000 | 0.1561 |
 | Qwen3 4B 8bit + QLoRA | 1000 | 1.217* | 3.376* | 0.1400 | 0.6946 |
 | Base Gemma 4 e4b 4bit | 0 | N/A | N/A | 0.0000 | 0.1065 |
 | Gemma 4 e4b 4bit + LoRA | 1000 | 4.670** | 106.661** | 0.0000 | 0.1061 |
@@ -129,6 +130,7 @@ These are lexical metrics, not SQL execution accuracy.
 - Gemma 4 test perplexity was computed on `10` test batches for runtime reasons
 - Gemma 4 generation path was later debugged and made consistent for cached vs non-cached decoding on small tests
 - Gemma 4 full EM/F1 evaluation now runs on the full `100` examples, but output quality remains poor
+- Gemma 4 full adapted predictions have not yet been exported to a permanent file in `outputs/predictions/`
 
 ## Interpretation
 
@@ -169,7 +171,7 @@ Reference results from the previous `mlx-examples/lora` experiment:
 - current Gemma 4 baseline: `EM = 0.0000`, `F1 = 0.1065`
 - current Gemma 4 run: `Test Loss = 4.670`, `PPL = 106.661`, `EM = 0.0000`, `F1 = 0.1061`
 
-This is close enough to treat the new repo as a working continuation of the earlier setup, although the current Mistral q4 run is not yet matching the strongest earlier score, while the current Qwen3 run is competitive and even stronger on F1.
+This is close enough to treat the new repo as a working continuation of the earlier setup, although the current Mistral q4 run is not yet matching the strongest earlier score, the current Qwen3 run is competitive and even stronger on F1, and the current Gemma 4 run is clearly much weaker than the other model families on this task.
 
 ## Mistral q4 Notes
 
@@ -232,6 +234,7 @@ Practical status in the current repo:
 ## Comparative Summary
 
 - `TinyLlama` is the weakest of the three but still useful to verify that the LoRA pipeline works in the standalone repo.
+- `TinyLlama` is the weakest model that still shows a useful LoRA gain and remains valuable as the lightweight workflow baseline.
 - `Mistral q4` currently gives the best exact match score in this repo run.
 - `Qwen3` currently gives the best F1 and the best perplexity, which makes it the strongest option for structurally correct SQL generation.
 - `Gemma 4` is now supported by the codebase and can be fully evaluated after the decode fix, but its current task performance is far too weak to compete with the other completed runs.
@@ -239,6 +242,7 @@ Practical status in the current repo:
   - choose `Mistral q4` if exact match is the main priority in the current runs
   - choose `Qwen3` if near-correct structured output quality is the main priority
   - keep `TinyLlama` as the lightweight baseline and reproducibility reference
+  - treat `Gemma 4` as a completed negative result for this specific setup unless prompt or adaptation strategy changes materially
 
 ## Artifacts
 
@@ -266,7 +270,7 @@ Notes:
 
 ## Recommended Next Step
 
-Decide whether to:
+The current Gemma 4 result is complete but weak, so the next step is to choose one of the following:
 
-1. keep `Gemma 4 e4b 4bit` as a completed but weak result in the comparison table, or
-2. investigate Gemma-specific prompt or LoRA-target changes before spending more time on another training run
+1. keep Gemma 4 as a negative result for this setup and focus future comparisons on TinyLlama, Mistral q4, and Qwen3, or
+2. run a targeted Gemma 4 follow-up experiment with different prompt formatting or LoRA target modules
