@@ -34,6 +34,15 @@ def token_f1(prediction: str, gold: str) -> float:
 
 
 def split_answer_and_source(text: str) -> tuple[str, str]:
+    normalized = normalize_text(text)
+    if normalized.startswith("{") and normalized.endswith("}"):
+        try:
+            payload = json.loads(normalized)
+            if isinstance(payload, dict) and "answer" in payload and "source" in payload:
+                return normalize_text(str(payload["answer"])), normalize_text(str(payload["source"]))
+        except Exception:  # noqa: BLE001
+            pass
+
     match = re.search(r"(?:^|\s)Sumber:\s*(.+)$", text, flags=re.IGNORECASE)
     if not match:
         return normalize_text(text), ""

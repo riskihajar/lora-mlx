@@ -135,6 +135,34 @@ Interpretation:
 - Most importantly, citation metrics still remain zero, which suggests that even stronger answer formatting alone is not enough to make the model reliably emit parseable source attribution.
 - This strengthens the interpretation that the current bottleneck is model adherence to source-format behavior, not only the wording of the gold answers.
 
+### JSON-structured answer-format check on a `10` example seen subset
+
+The answer format was then made even stricter by storing each gold answer as serialized JSON with explicit `answer` and `source` fields.
+
+JSON split summary:
+
+- total rows: `90`
+- train rows: `44`
+- valid rows: `9`
+- test seen rows: `22`
+- test unseen rows: `15`
+
+TinyLlama legal-aware metrics on the JSON seen subset (`10` examples):
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.3674 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.5026 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.3079 | 0.0000 | 0.0250 |
+
+Interpretation:
+
+- The JSON format preserves the expected ordering `B > A > C` on this subset.
+- `B` improves noticeably and remains the strongest condition.
+- `C` remains below `A` on this subset, so adapter-only performance is not yet recovering the quality of either the context condition or the stronger earlier TinyLlama seen result.
+- The most important movement is that `citation_component_score` becomes non-zero for `C`, which is the first sign that a more constrained answer format may help citation behavior become measurable.
+- Even so, citation performance remains very weak overall, so the source-traceability problem is not solved yet.
+
 ## Mistral q4 Baseline
 
 ### Early status
@@ -256,6 +284,7 @@ Additional failure note:
 - the Qwen3 unseen-split comparison still needs a smaller or more staged evaluation run to complete reliably
 - even after tightening the gold-answer style, citation metrics remain zero on the refined TinyLlama legal-aware check
 - even after moving to a more structured two-line answer format, citation metrics remain zero in the TinyLlama structured-format check
+- the JSON-format experiment shows a small citation gain, but not enough yet to treat source-traceability as solved
 - the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step
@@ -268,3 +297,8 @@ Refined follow-up direction:
 
 - keep the current finding that answer quality and source traceability are currently separating
 - test whether a more explicitly structured output format can improve citation metrics without losing answer quality
+
+Current direction after the JSON-format check:
+
+- the JSON format is the strongest current candidate for future reruns because it is the first format that yields any measurable citation-component movement
+- the next useful step is to rerun the JSON-format experiment on a larger subset before treating the result as stable
