@@ -422,7 +422,9 @@ Because the design explicitly compares document-context inference with adapter-b
 
 ## Implementation plan in this repo
 
-### Phase 1: ingestion
+The implementation should stay script-first, reproducible, and runnable without assistant intervention. Every major step should be executable manually from the CLI, and interactive scripts should still support explicit command-line arguments for reproducibility.
+
+### Phase 1: source ingestion
 
 Add a script such as:
 
@@ -437,29 +439,112 @@ Responsibilities:
 - call `/api/v1/laws/{frbr_uri}`
 - save local raw cache
 
-### Phase 2: dataset construction
+Current implementation status:
 
-Add a script such as:
+- initial ingestion script exists
+- `.env`-backed token loading exists
+
+### Phase 2: canonical document unit construction
+
+Add or refine a script such as:
 
 ```text
-scripts/build_pasalid_qa_dataset.py
+scripts/build_pasalid_doc_units.py
 ```
 
 Responsibilities:
 
-- flatten regulation content
-- generate training examples
-- create `train.jsonl`, `valid.jsonl`, `test.jsonl`
+- load local Pasal.id raw cache
+- keep only usable and policy-safe derived fields
+- normalize legal documents into canonical units
+- preserve source traceability per unit
+
+Suggested output:
+
+```text
+data/pasalid/doc_units.jsonl
+```
+
+Each canonical record should minimally include:
+
+- `law_id`
+- `frbr_uri`
+- `title`
+- `article_number`
+- `question_type_candidate`
+- `source_reference`
+- `source_doc`
+
+### Phase 3: synthetic QA generation
+
+Add a script such as:
+
+```text
+scripts/generate_pasalid_qa.py
+```
+
+Responsibilities:
+
+- load `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` from `.env`
+- use the OpenAI SDK against the configured OpenAI-like endpoint
+- generate question-answer pairs from canonical document units
+- support both CLI arguments and interactive prompts
+- support append versus overwrite modes
+- save a canonical QA bank before any train/test split
+
+Suggested output:
+
+```text
+data/pasalid/qa_bank.jsonl
+```
+
+Each QA bank record should include at least:
+
+- `law_id`
+- `frbr_uri`
+- `question`
+- `answer`
+- `source_reference`
+- `source_doc`
+- `question_type`
+- `difficulty`
+- `generation_model`
+
+Interactive mode should ask for:
+
+- input file
+- output file
+- number of laws or units to process
+- overwrite or append
+- question generation mode
+- questions per fact unit
+
+### Phase 4: experiment split builder
+
+Add a script such as:
+
+```text
+scripts/split_pasalid_experiment.py
+```
+
+Responsibilities:
+
+- split the canonical QA bank into experiment-ready subsets
+- support seen-document and unseen-document evaluation
+- avoid leakage by splitting at the law level
+- optionally reserve paraphrased questions for seen-document test conditions
 
 Suggested output:
 
 ```text
 data/pasalid/train.jsonl
 data/pasalid/valid.jsonl
-data/pasalid/test.jsonl
+data/pasalid/test_seen.jsonl
+data/pasalid/test_unseen.jsonl
+data/pasalid/split_manifest.json
 ```
 
-### Phase 3: configs
+### Phase 5: training configs and wrappers
 
 Add config presets such as:
 
@@ -468,7 +553,21 @@ configs/pasalid_tinyllama.yaml
 configs/pasalid_qwen3_4b_8bit.yaml
 ```
 
-### Phase 4: evaluation support
+Add wrapper scripts such as:
+
+```text
+scripts/train_pasalid_tinyllama.sh
+scripts/train_pasalid_qwen3.sh
+scripts/eval_pasalid_tinyllama.sh
+scripts/eval_pasalid_qwen3.sh
+```
+
+Current implementation status:
+
+- initial Pasal.id training configs exist
+- initial training and evaluation wrappers exist
+
+### Phase 6: experiment evaluator
 
 Either extend the current evaluation flow or add a dedicated legal evaluator:
 
@@ -482,7 +581,19 @@ This evaluator can support:
 - citation parsing
 - rubric-friendly exported outputs
 
-### Phase 5: thesis reporting
+This evaluator should support the three main conditions:
+
+- A: base model without document context
+- B: base model with source document context
+- C: base model plus adapter without document context
+
+It should also emit outputs that make the following comparisons easy to inspect:
+
+- `A vs B`
+- `B vs C`
+- `A vs C`
+
+### Phase 7: experiment reporting
 
 Add a dedicated report file such as:
 
@@ -490,17 +601,91 @@ Add a dedicated report file such as:
 docs/pasalid-thesis-experiment-report.md
 ```
 
+## Detailed implementation checklist
+
+### Track 1: data ingestion and cleaning
+
+- [x] Add `.env`-backed Pasal.id API client
+- [x] Add initial corpus ingestion script
+- [x] Build local raw cache in `data/pasalid_raw/`
+- [x] Filter for `content_verified == true` in the pilot pipeline
+- [x] Add basic OCR and footer cleanup
+- [ ] Add stronger text-quality scoring for article content
+- [ ] Add filtering for administrative or low-value regulations if needed
+- [ ] Add logging summary for kept versus dropped laws and articles
+
+### Track 2: canonical document units
+
+- [ ] Introduce canonical `doc_units.jsonl` output
+- [ ] Define stable schema for document units
+- [ ] Include `law_id`, `frbr_uri`, `source_reference`, and `source_doc`
+- [ ] Group units by legal fact type where possible
+- [ ] Add per-unit metadata needed for QA generation
+
+### Track 3: QA generation with OpenAI-like endpoint
+
+- [ ] Add OpenAI SDK-based helper module
+- [ ] Validate model and endpoint at script startup
+- [ ] Add `scripts/generate_pasalid_qa.py`
+- [ ] Support interactive mode with prompts
+- [ ] Support non-interactive mode with CLI args
+- [ ] Generate multiple paraphrased questions per fact unit
+- [ ] Include source-backed answers with traceable references
+- [ ] Save a canonical QA bank before splitting
+- [ ] Save generation metadata for reproducibility
+
+### Track 4: experimental split builder
+
+- [ ] Split QA bank by law, not by random sample
+- [ ] Create `train.jsonl`
+- [ ] Create `valid.jsonl`
+- [ ] Create `test_seen.jsonl`
+- [ ] Create `test_unseen.jsonl`
+- [ ] Create `split_manifest.json`
+- [ ] Enforce that test questions are not literal duplicates of train questions
+- [ ] Balance splits by question type where feasible
+- [ ] Balance splits by answer length where feasible
+
+### Track 5: baseline training
+
+- [x] Add initial TinyLlama Pasal.id train wrapper
+- [x] Add initial Qwen3 Pasal.id train wrapper
+- [ ] Run TinyLlama baseline on cleaned split dataset
+- [ ] Run Qwen3 baseline on cleaned split dataset
+- [ ] Save adapters with experiment-specific names
+- [ ] Record train and validation losses in a reportable format
+
+### Track 6: A/B/C evaluation
+
+- [ ] Implement evaluation prompts for condition A
+- [ ] Implement evaluation prompts for condition B
+- [ ] Implement evaluation prompts for condition C
+- [ ] Export comparable outputs for the same question set
+- [ ] Measure answer quality and token overlap metrics
+- [ ] Measure factual consistency and source traceability manually on a subset
+- [ ] Measure inference efficiency for B versus C
+
+### Track 7: documentation and reproducibility
+
+- [ ] Document every command needed to reproduce ingestion
+- [ ] Document every command needed to reproduce QA generation
+- [ ] Document every command needed to reproduce split building
+- [ ] Document every command needed to reproduce training and evaluation
+- [ ] Add run manifests for dataset and model artifacts
+- [ ] Keep generated raw caches and dataset derivatives out of git where appropriate
+
 ## Immediate next steps
 
-1. Confirm the first legal domain subset to ingest
-2. Add environment-variable loading for `PASAL_ID_API_KEY`
-3. Build the Pasal.id ingestion script
-4. Build a small pilot dataset with `20` to `100` manually reviewed QA pairs
-5. Run a first baseline experiment with `TinyLlama` and `Qwen3`
+1. Build canonical document units from the current cleaned Pasal.id cache
+2. Add OpenAI SDK-based QA generation as a standalone interactive script
+3. Generate a first canonical QA bank from a small but clean legal subset
+4. Build `train`, `valid`, `test_seen`, and `test_unseen` from that QA bank
+5. Rerun the TinyLlama baseline on the split dataset before moving to Qwen3
 
 ## Success criteria for the first milestone
 
 - local ingestion from Pasal.id works with the API key from `.env`
-- a clean pilot JSONL dataset exists in `data/pasalid/`
-- base versus adapter evaluation works without source documents at inference
-- the report can show whether the adapter captures meaningful document knowledge beyond the base model
+- a clean canonical QA bank exists in `data/pasalid/`
+- experiment splits exist for `train`, `valid`, `test_seen`, and `test_unseen`
+- condition A, B, and C can all be executed from scripts
+- the report can show whether the adapter captures meaningful document knowledge beyond the base model and how close it gets to the context-based baseline

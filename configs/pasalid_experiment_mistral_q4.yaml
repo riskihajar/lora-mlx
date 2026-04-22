@@ -1,0 +1,8 @@
+model: mlx_model_mistral_q4
+adapter_file: outputs/adapters/adapters_pasalid_mistral_q4_experiment.npz
+batch_size: 1
+lora_layers: 4
+train_iters: 1000
+eval_test_batches: 20
+eval_max_new_tokens: 96
+data_dir: data/pasalid/experiment_split

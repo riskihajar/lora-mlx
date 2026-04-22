@@ -99,6 +99,7 @@ source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.lora --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.convert --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.evaluation --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.export --help
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.pasalid --help
 ```
 
 ## Default Paths

@@ -26,7 +26,8 @@ def apply_lora_layers(model, lora_layers):
     target_layers = model.model.layers[len(model.model.layers) - lora_layers :]
     for layer in target_layers:
         layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
-        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        if layer.self_attn.v_proj is not None:
+            layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
         if hasattr(layer, "block_sparse_moe"):
             layer.block_sparse_moe.gate = LoRALinear.from_linear(layer.block_sparse_moe.gate)
 
