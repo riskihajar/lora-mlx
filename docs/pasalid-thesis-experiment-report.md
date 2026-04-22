@@ -132,15 +132,50 @@ Interpretation:
 - Mistral q4 without an adapter currently over-enumerates or drifts into irrelevant legal references on some Pasal.id questions
 - unseen questions about numeric legal or budget values remain difficult for both TinyLlama and Mistral without explicit context
 
+## Qwen3 Baseline
+
+### Early status
+
+- Model: `mlx-community/Qwen3-4B-8bit`
+- Adapter target: `outputs/adapters/adapters_pasalid_qwen3_experiment.npz`
+- A shortened training run was completed to `150` iterations and produced a usable adapter artifact.
+- Validation loss at iteration `1`: `1.414`
+- Train loss reached the `0.883 - 1.211` range in the short run.
+
+### Seen-split A/B/C smoke results on `10` examples
+
+| Condition | Description | EM | F1 |
+| --- | --- | ---: | ---: |
+| A | Base model, no context | 0.0000 | 0.1752 |
+| B | Base model, with source context | 0.0000 | 0.3684 |
+| C | Base model + LoRA adapter, no context | 0.0000 | 0.2411 |
+
+Interpretation:
+
+- `A vs B` again shows a strong context advantage.
+- `A vs C` shows a meaningful adapter gain over the no-context base model.
+- `B vs C` still leaves a visible gap, but the adapter moves the model toward the context-based condition.
+- In this early smoke test, Qwen3 behaves more competitively than Mistral q4 in the adapter-only condition.
+
+### Unseen-split status
+
+- Full unseen smoke checks for Qwen3 did not finish within the current command window.
+- The seen-split result is usable, but the unseen comparison for Qwen3 is still incomplete.
+
+Additional failure note:
+
+- Qwen3 still shows answer-format drift, including numbered multiple-choice style output and partial restatement of the prompt structure.
+
 ## Current Limitation
 
 - some training samples are still longer than the TinyLlama context window, which may reduce training quality
 - the QA bank is generated and useful, but still needs continued quality refinement
 - the current TinyLlama run is a first baseline, not the final adapter result for the study
 - the current Mistral q4 adapter run is only a short baseline pass and should not be treated as the final Mistral result
+- the Qwen3 unseen-split comparison still needs a smaller or more staged evaluation run to complete reliably
 
 ## Next Step
 
-1. complete a longer `Mistral q4` adapter run on the same experiment split
-2. refine the QA bank and answer style to reduce variability and improve traceable evidence format
-3. move to `Qwen3` after the stronger Mistral baseline is stabilized
+1. complete a staged unseen-split evaluation for Qwen3 so all three conditions are available on both seen and unseen splits
+2. rerun a longer `Mistral q4` adapter training pass for a fairer comparison against Qwen3
+3. refine the QA bank and answer style to reduce variability and improve traceable evidence format
