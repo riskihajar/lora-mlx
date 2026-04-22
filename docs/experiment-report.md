@@ -15,6 +15,19 @@
 - Local MLX model path: `mlx_model`
 - Source: copied from the prior working repo `mlx-examples/lora`
 
+### Stronger quantized model
+
+- Model: `mistralai/Mistral-7B-v0.1`
+- Local MLX model path: `mlx_model_mistral_q4`
+- Quantization: 4-bit, group size 64
+- Source: copied from the prior working repo `mlx-examples/lora`
+
+### MLX community model
+
+- Model: `mlx-community/Qwen3-4B-8bit`
+- Loaded directly from Hugging Face MLX community
+- Quantization: 8-bit MLX community release
+
 ### Training configuration
 
 - Script: `src/lora_mlx/lora.py`
@@ -23,6 +36,8 @@
 - LoRA layers: `4`
 - Iterations: `1000`
 - Adapter output: `outputs/adapters/adapters_tinyllama.npz`
+- Mistral q4 adapter output: `outputs/adapters/adapters_mistral_q4.npz`
+- Qwen3 adapter output: `outputs/adapters/adapters_qwen3_4b_8bit.npz`
 
 ## What LoRA Changes in This Repo
 
@@ -77,7 +92,11 @@ These are lexical metrics, not SQL execution accuracy.
 | Model | Iterations | Test Loss | Test PPL | EM | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Base TinyLlama | 0 | N/A | N/A | 0.0000 | 0.1089 |
+| Base Mistral q4 | 0 | N/A | N/A | 0.0000 | 0.1394 |
+| Base Qwen3 4B 8bit | 0 | N/A | N/A | 0.0000 | 0.1561 |
 | TinyLlama + LoRA | 1000 | 1.676 | 5.343 | 0.0000 | 0.3135 |
+| Mistral q4 + QLoRA | 1000 | 1.561 | 4.765 | 0.1600 | 0.4467 |
+| Qwen3 4B 8bit + QLoRA | 1000 | 1.217* | 3.376* | 0.1400 | 0.6946 |
 
 ## Training Notes
 
@@ -93,6 +112,11 @@ These are lexical metrics, not SQL execution accuracy.
 - EM/F1 were computed on the full `100` examples in `data/test.jsonl`
 - Baseline predictions were exported to `outputs/predictions/tinyllama_base_test_predictions.jsonl`
 - Predictions were exported to `outputs/predictions/tinyllama_1000_test_predictions.jsonl`
+- Mistral q4 baseline predictions were exported to `outputs/predictions/mistral_q4_base_test_predictions.jsonl`
+- Mistral q4 predictions were exported to `outputs/predictions/mistral_q4_1000_test_predictions.jsonl`
+- Qwen3 baseline predictions were exported to `outputs/predictions/qwen3_4b_8bit_base_test_predictions.jsonl`
+- Qwen3 predictions were exported to `outputs/predictions/qwen3_4b_8bit_1000_test_predictions.jsonl`
+- Qwen3 perplexity was computed on `20` test batches for runtime reasons
 
 ## Interpretation
 
@@ -101,6 +125,13 @@ These are lexical metrics, not SQL execution accuracy.
 - Perplexity is very close to the earlier experiment, which is a good sign that the refactored repo preserves the training path.
 - Moving from baseline `F1 = 0.1089` to LoRA `F1 = 0.3135` is a meaningful gain in structural task alignment.
 - `F1 = 0.3135` shows the model often captures useful SQL structure even when exact match remains `0.0000`.
+- Mistral q4 is clearly stronger than TinyLlama on this task in the new repo as well.
+- `EM = 0.1600` and `F1 = 0.4467` show that Mistral q4 generates exact SQL more often and reaches better structural overlap.
+- Mistral q4 still shows some prompt continuation drift, so the gap is not purely model strength; decoding behavior also matters.
+- Qwen3 has the strongest structural score in the current repo run.
+- `F1 = 0.6946` and `PPL = 3.376` suggest Qwen3 is the best current model for near-correct SQL generation on this dataset.
+- Qwen3 does not lead Mistral q4 on exact match in this run (`0.1400` vs `0.1600`), which suggests it is often close but not always exact.
+- Across base models, `Qwen3` also starts from the strongest baseline F1.
 - The largest remaining failure modes appear to be:
   - entity spelling mismatches
   - wrong target column selection
@@ -109,24 +140,83 @@ These are lexical metrics, not SQL execution accuracy.
 
 ## Comparison With Earlier Repo
 
-Reference result from the previous `mlx-examples/lora` experiment for TinyLlama `1000`:
+Reference results from the previous `mlx-examples/lora` experiment:
 
 - previous run: `Test Loss = 1.674`, `PPL = 5.333`, `EM = 0.0300`, `F1 = 0.3245`
 - current baseline: `EM = 0.0000`, `F1 = 0.1089`
 - current LoRA run: `Test Loss = 1.676`, `PPL = 5.343`, `EM = 0.0000`, `F1 = 0.3135`
+- previous Mistral q4 run: `Test Loss = 1.549`, `PPL = 4.705`, `EM = 0.2400`, `F1 = 0.7231`
+- current Mistral q4 run: `Test Loss = 1.561`, `PPL = 4.765`, `EM = 0.1600`, `F1 = 0.4467`
+- previous Qwen3 run: `Test Loss = 1.174`, `PPL = 3.234`, `EM = 0.1900`, `F1 = 0.6109`
+- current Qwen3 baseline: `EM = 0.0000`, `F1 = 0.1561`
+- current Qwen3 run: `Test Loss = 1.217`, `PPL = 3.376`, `EM = 0.1400`, `F1 = 0.6946`
 
-This is close enough to treat the new repo as a working continuation of the earlier TinyLlama setup.
+This is close enough to treat the new repo as a working continuation of the earlier setup, although the current Mistral q4 run is not yet matching the strongest earlier score, while the current Qwen3 run is competitive and even stronger on F1.
+
+## Mistral q4 Notes
+
+- Initial validation loss at iteration `1`: `2.219`
+- Final validation loss at iteration `1000`: `1.046`
+- Test loss: `1.561`
+- Test PPL: `4.765`
+- EM: `0.1600`
+- F1: `0.4467`
+- Final adapter: `outputs/adapters/adapters_mistral_q4.npz`
+- Exported predictions: `outputs/predictions/mistral_q4_1000_test_predictions.jsonl`
+
+Example strong prediction from the current run:
+
+```text
+SELECT Nationality FROM 1-10015132-16 WHERE Player = 'Terrence Ross'
+```
+
+## Qwen3 Notes
+
+- Initial validation loss at iteration `1`: `2.523`
+- Final validation loss at iteration `1000`: `1.168`
+- Test loss: `1.217`
+- Test PPL: `3.376` computed on `20` test batches
+- Base EM: `0.0000`
+- Base F1: `0.1561`
+- QLoRA EM: `0.1400`
+- QLoRA F1: `0.6946`
+- Final adapter: `outputs/adapters/adapters_qwen3_4b_8bit.npz`
+- Exported baseline predictions: `outputs/predictions/qwen3_4b_8bit_base_test_predictions.jsonl`
+- Exported predictions: `outputs/predictions/qwen3_4b_8bit_1000_test_predictions.jsonl`
+
+Example strong prediction from the current run:
+
+```text
+SELECT Nationality FROM 1-10015132-16 WHERE Player = 'Terrence Ross'
+```
+
+## Comparative Summary
+
+- `TinyLlama` is the weakest of the three but still useful to verify that the LoRA pipeline works in the standalone repo.
+- `Mistral q4` currently gives the best exact match score in this repo run.
+- `Qwen3` currently gives the best F1 and the best perplexity, which makes it the strongest option for structurally correct SQL generation.
+- The combined picture suggests:
+  - choose `Mistral q4` if exact match is the main priority in the current runs
+  - choose `Qwen3` if near-correct structured output quality is the main priority
+  - keep `TinyLlama` as the lightweight baseline and reproducibility reference
 
 ## Artifacts
 
 - Local TinyLlama MLX model: `mlx_model`
+- Local Mistral q4 MLX model: `mlx_model_mistral_q4`
 - Dataset splits:
   - `data/train.jsonl`
   - `data/valid.jsonl`
   - `data/test.jsonl`
 - Final adapter: `outputs/adapters/adapters_tinyllama.npz`
+- Final Mistral q4 adapter: `outputs/adapters/adapters_mistral_q4.npz`
+- Final Qwen3 adapter: `outputs/adapters/adapters_qwen3_4b_8bit.npz`
 - Exported baseline predictions: `outputs/predictions/tinyllama_base_test_predictions.jsonl`
 - Exported predictions: `outputs/predictions/tinyllama_1000_test_predictions.jsonl`
+- Exported Mistral q4 baseline predictions: `outputs/predictions/mistral_q4_base_test_predictions.jsonl`
+- Exported Mistral q4 predictions: `outputs/predictions/mistral_q4_1000_test_predictions.jsonl`
+- Exported Qwen3 baseline predictions: `outputs/predictions/qwen3_4b_8bit_base_test_predictions.jsonl`
+- Exported Qwen3 predictions: `outputs/predictions/qwen3_4b_8bit_1000_test_predictions.jsonl`
 
 ## Recommended Next Step
 
