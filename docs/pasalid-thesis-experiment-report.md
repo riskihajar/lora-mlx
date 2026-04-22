@@ -181,6 +181,33 @@ Interpretation:
 - Citation behavior remains weak, but the non-zero `citation_component_score` for `C` is still present on the larger subset, which suggests a small but repeatable movement rather than a one-off artifact.
 - The practical conclusion is that JSON formatting improves measurability of source behavior more than it improves the model's actual source-discipline.
 
+### Larger JSON `answer + source` rerun on a `20` example seen subset
+
+The JSON `answer + source` format was then rerun on a larger QA bank and a larger split.
+
+Larger JSON split summary:
+
+- total rows: `180`
+- train rows: `96`
+- valid rows: `15`
+- test seen rows: `48`
+- test unseen rows: `21`
+
+TinyLlama legal-aware metrics on the larger JSON seen subset (`20` examples):
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.3151 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.5078 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.3439 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- The larger rerun stabilizes the expected ordering `B > C > A`.
+- `C` again improves over `A`, which strengthens the adapter-internalization signal for answer quality.
+- However, the earlier tiny non-zero citation movement does not survive on the larger subset.
+- The main conclusion is now more stable: JSON `answer + source` is the strongest current answer format for quality comparison, but source attribution remains unresolved.
+
 ### Mistral q4 JSON-format comparison on a `10` example seen subset
 
 The same JSON-format evaluation was also tested on `Mistral q4` using the longer adapter checkpoint.
