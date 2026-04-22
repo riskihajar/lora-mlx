@@ -38,8 +38,17 @@ def split_answer_and_source(text: str) -> tuple[str, str]:
     if normalized.startswith("{") and normalized.endswith("}"):
         try:
             payload = json.loads(normalized)
-            if isinstance(payload, dict) and "answer" in payload and "source" in payload:
-                return normalize_text(str(payload["answer"])), normalize_text(str(payload["source"]))
+            if isinstance(payload, dict) and "answer" in payload:
+                if "source" in payload:
+                    return normalize_text(str(payload["answer"])), normalize_text(str(payload["source"]))
+                source_parts = [
+                    str(payload.get("source_type", "")).strip(),
+                    str(payload.get("source_number", "")).strip(),
+                    str(payload.get("source_year", "")).strip(),
+                    str(payload.get("source_article", "")).strip(),
+                ]
+                source_text = " ".join(part for part in source_parts if part)
+                return normalize_text(str(payload["answer"])), normalize_text(source_text)
         except Exception:  # noqa: BLE001
             pass
 
@@ -58,6 +67,14 @@ def exact_match(left: str, right: str) -> int:
 def parse_reference(text: str) -> dict[str, str]:
     normalized = normalize_text(text)
     result = {"type": "", "number": "", "year": "", "article": ""}
+
+    parts = normalized.split()
+    if len(parts) == 4 and parts[0].upper() == "UU":
+        result["type"] = "UU"
+        result["number"] = parts[1]
+        result["year"] = parts[2]
+        result["article"] = parts[3]
+        return result
 
     law_match = re.search(r"\b(UU|Undang-Undang)\b\s*(?:No\.?|Nomor)?\s*([A-Za-z0-9]+)\s*Tahun\s*(\d{4})", normalized, flags=re.IGNORECASE)
     if law_match:

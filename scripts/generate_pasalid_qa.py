@@ -25,12 +25,15 @@ Rules:
 - Prefer short declarative answers rather than bullet lists or numbered lists.
 - Do not use multiple-choice formatting.
 - The answer string must itself contain a JSON object serialized as text.
-- The serialized JSON object must contain exactly these keys: answer, source.
+- The serialized JSON object must contain exactly these keys: answer, source_type, source_number, source_year, source_article.
 - The answer field must contain the concise legal answer only.
-- The source field must exactly match the provided source_reference value.
+- source_type must be the regulation type such as UU.
+- source_number must contain the regulation number only.
+- source_year must contain the regulation year only.
+- source_article must contain the article identifier only.
 - The source reference must exactly match the provided source_reference field.
-- Never omit the source field.
-- Never rewrite or paraphrase the source reference.
+- Never omit any source component.
+- Never rewrite or paraphrase the source_reference into another citation.
 - Never add extra keys.
 - Do not invent legal facts not present in the source.
 - Use Indonesian.
@@ -42,11 +45,18 @@ def load_doc_units(path: Path) -> list[dict]:
 
 
 def build_user_prompt(unit: dict) -> str:
+    source_parts = {
+        "source_type": unit["type"],
+        "source_number": str(unit["number"]),
+        "source_year": str(unit["year"]),
+        "source_article": str(unit["article_number"]),
+    }
     return json.dumps(
         {
             "title": unit["title"],
             "short_title": unit["short_title"],
             "source_reference": unit["source_reference"],
+            "source_parts": source_parts,
             "question_type_candidate": unit["question_type_candidate"],
             "source_doc": unit["source_doc"],
             "instruction": "Generate multiple high-quality legal QA pairs grounded in the source.",
@@ -59,9 +69,9 @@ def build_user_prompt(unit: dict) -> str:
                 ],
                 "answer_style": [
                     "answer must be serialized JSON text",
-                    "JSON must contain answer and source keys only",
+                    "JSON must contain answer, source_type, source_number, source_year, and source_article only",
                     "no numbering or bullet points",
-                    "source field must use the exact provided source_reference",
+                    "source components must match the provided source_parts exactly",
                 ],
             },
         },

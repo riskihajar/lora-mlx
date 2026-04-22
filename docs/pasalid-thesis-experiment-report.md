@@ -199,6 +199,30 @@ Interpretation:
 - This suggests that stronger model capacity alone does not solve the source-traceability bottleneck.
 - The current evidence points toward task and output design as the main remaining bottleneck, rather than model size by itself.
 
+### Source-component ablation on a `10` example seen subset
+
+The source field was then decomposed into explicit components:
+
+- `source_type`
+- `source_number`
+- `source_year`
+- `source_article`
+
+TinyLlama legal-aware metrics on the source-component subset (`10` examples):
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.3275 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.4839 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.2949 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- The source-component format keeps the same broad answer-quality ordering `B > A > C`.
+- However, decomposing the source into separate fields does not improve citation metrics at all.
+- Compared with the earlier JSON `answer + source` format, this source-component format performs worse as a traceability intervention because it removes even the small non-zero citation movement that had appeared before.
+- This makes the source-component format a useful negative result or ablation: stronger structural decomposition alone does not solve source adherence.
+
 ## Mistral q4 Baseline
 
 ### Early status
@@ -322,6 +346,7 @@ Additional failure note:
 - even after moving to a more structured two-line answer format, citation metrics remain zero in the TinyLlama structured-format check
 - the JSON-format experiment shows a small citation gain, but not enough yet to treat source-traceability as solved
 - the Mistral JSON-format comparison reinforces that source-traceability is still the main unresolved weakness across models
+- the source-component ablation suggests that decomposing citation fields is not, by itself, an effective fix for the traceability bottleneck
 - the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step
@@ -340,3 +365,8 @@ Current direction after the JSON-format check:
 - the JSON format is the strongest current candidate for future reruns because it is the first format that yields any measurable citation-component movement
 - the next useful step is to rerun the JSON-format experiment on a larger subset before treating the result as stable
 - the next stronger intervention should decompose source attribution into separate structured components instead of a single source string
+
+Updated direction after the source-component ablation:
+
+- keep JSON `answer + source` as the main candidate format going forward
+- treat the source-component setup as an ablation result rather than the primary next-step format
