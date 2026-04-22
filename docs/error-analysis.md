@@ -9,7 +9,7 @@ Models covered:
 - `TinyLlama + LoRA 1000`
 - `Mistral q4 + QLoRA 1000`
 - `Qwen3 4B 8bit + QLoRA 1000`
-- `Gemma 4 e4b 4bit + LoRA 1000` (small-slice sanity eval only)
+- `Gemma 4 e4b 4bit` base and `Gemma 4 e4b 4bit + LoRA 1000`
 
 ## TinyLlama
 
@@ -85,7 +85,7 @@ Interpretation:
 
 Primary references:
 
-- small-slice sanity eval on `10` examples after decode-path fixes
+- full EM/F1 evaluation on `100` examples after decode-path fixes
 - sample exports from `tmp/gemma4_eval_sample_predictions.jsonl`
 
 Recurring failure patterns:
@@ -96,12 +96,13 @@ Recurring failure patterns:
   - example: `1-1008359835983598359835`
 - output stays anchored to prompt surface tokens rather than query semantics
   - model often echoes table ids while ignoring the requested column and predicate
-- LoRA does not currently improve the small-slice behavior
-  - adapted outputs remain in the same failure family and did not beat the base model on the `10`-example sanity slice
+- LoRA does not currently improve the full-eval behavior
+  - base full eval: `EM = 0.0000`, `F1 = 0.1065`
+  - adapted full eval: `EM = 0.0000`, `F1 = 0.1061`
 
 Interpretation:
 
-- The earlier generation-path bug is no longer the main blocker; cached and non-cached tiny-rollout decoding now match.
+- The earlier generation-path bug is no longer the main blocker; cached and non-cached tiny-rollout decoding now match and full evaluation runs end-to-end.
 - Gemma 4 is currently failing more because of poor task alignment than because of a broken evaluation path.
 - On this dataset and prompt format, the model behaves like it is over-attending to surface ids and delimiters instead of learning SQL completion.
 
