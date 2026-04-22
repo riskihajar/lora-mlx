@@ -21,13 +21,16 @@ Rules:
 - items must be a JSON array.
 - Each item in the array must contain exactly these keys: question, answer, question_type, difficulty.
 - The question must be answerable from the source document unit.
-- The answer must be concise, factually grounded, and must include the source reference.
+- The answer must be concise, factually grounded, and must use a structured two-line format.
 - Prefer short declarative answers rather than bullet lists or numbered lists.
 - Do not use multiple-choice formatting.
-- End the answer with a single source sentence in the exact form: "Sumber: <reference>."
+- The answer must have exactly two lines:
+  1. "Jawaban: <concise factual answer>"
+  2. "Sumber: <reference>."
 - The source reference must exactly match the provided source_reference field.
 - Never omit the source sentence.
 - Never rewrite or paraphrase the source reference.
+- Never add extra lines before or after the two required lines.
 - Do not invent legal facts not present in the source.
 - Use Indonesian.
 """
@@ -54,7 +57,9 @@ def build_user_prompt(unit: dict) -> str:
                     "one paraphrased or source-traceability question",
                 ],
                 "answer_style": [
-                    "one concise paragraph only",
+                    "exactly two lines",
+                    "line 1 must start with Jawaban:",
+                    "line 2 must start with Sumber:",
                     "no numbering or bullet points",
                     "must end with an exact source sentence",
                     "source sentence must use the exact provided source_reference",

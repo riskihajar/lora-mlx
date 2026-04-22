@@ -103,6 +103,38 @@ Interpretation:
 - Citation metrics remain zero, which indicates that the main bottleneck is no longer only QA-bank formatting; the model itself is still not reliably reproducing the required citation style at inference time.
 - This is an important result for the thesis because it separates two phenomena: partial answer internalization is visible, but source-attribution behavior is still weak.
 
+### Structured answer-format check on a `10` example seen subset
+
+The QA bank was then regenerated with a stricter two-line answer format:
+
+- `Jawaban: ...`
+- `Sumber: ...`
+
+This produced a larger structured QA bank and a new structured experiment split.
+
+Structured split summary:
+
+- total rows: `120`
+- train rows: `60`
+- valid rows: `15`
+- test seen rows: `30`
+- test unseen rows: `15`
+
+TinyLlama legal-aware metrics on the structured seen subset (`10` examples):
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.3354 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.3637 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.3246 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- The structured answer format keeps answer quality in a usable range.
+- The broad ordering still favors the context condition, but on this structured subset the no-context base model is slightly above the adapter condition.
+- Most importantly, citation metrics still remain zero, which suggests that even stronger answer formatting alone is not enough to make the model reliably emit parseable source attribution.
+- This strengthens the interpretation that the current bottleneck is model adherence to source-format behavior, not only the wording of the gold answers.
+
 ## Mistral q4 Baseline
 
 ### Early status
@@ -223,6 +255,7 @@ Additional failure note:
 - the current Mistral q4 adapter run is only a short baseline pass and should not be treated as the final Mistral result
 - the Qwen3 unseen-split comparison still needs a smaller or more staged evaluation run to complete reliably
 - even after tightening the gold-answer style, citation metrics remain zero on the refined TinyLlama legal-aware check
+- even after moving to a more structured two-line answer format, citation metrics remain zero in the TinyLlama structured-format check
 - the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step

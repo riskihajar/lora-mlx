@@ -80,12 +80,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", default=str(DEFAULT_QA_BANK), help="Input QA bank JSONL")
     parser.add_argument("--output-dir", default=str(DEFAULT_SPLIT_DIR), help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--min-laws", type=int, default=4, help="Minimum distinct laws required to build full experiment splits")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
     rows = load_rows(Path(args.input))
+    law_count = len({row["law_id"] for row in rows})
+    if law_count < args.min_laws:
+        raise ValueError(
+            f"Need at least {args.min_laws} laws to build experiment splits, but only found {law_count}."
+        )
     splits = split_rows(rows, args.seed)
     output_dir = Path(args.output_dir)
 
