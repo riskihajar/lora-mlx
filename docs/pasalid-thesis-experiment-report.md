@@ -163,6 +163,42 @@ Interpretation:
 - The most important movement is that `citation_component_score` becomes non-zero for `C`, which is the first sign that a more constrained answer format may help citation behavior become measurable.
 - Even so, citation performance remains very weak overall, so the source-traceability problem is not solved yet.
 
+### JSON-structured answer-format check on a `20` example seen subset
+
+The JSON-format evaluation was then rerun on a larger `20`-example seen subset.
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.3538 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.5196 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.3214 | 0.0000 | 0.0125 |
+
+Interpretation:
+
+- The broader subset confirms the same ordering `B > A > C`.
+- `B` remains clearly strongest, which reinforces the continued advantage of explicit document context.
+- `C` still does not overtake `A` under the current JSON-format setup.
+- Citation behavior remains weak, but the non-zero `citation_component_score` for `C` is still present on the larger subset, which suggests a small but repeatable movement rather than a one-off artifact.
+- The practical conclusion is that JSON formatting improves measurability of source behavior more than it improves the model's actual source-discipline.
+
+### Mistral q4 JSON-format comparison on a `10` example seen subset
+
+The same JSON-format evaluation was also tested on `Mistral q4` using the longer adapter checkpoint.
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.2283 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.3898 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.2622 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- Mistral follows the same broad ordering `B > C > A` on the JSON-format subset.
+- `C` improves over `A`, so the adapter still captures useful answer content.
+- Unlike TinyLlama, Mistral shows no measurable citation-component movement in this JSON-format check.
+- This suggests that stronger model capacity alone does not solve the source-traceability bottleneck.
+- The current evidence points toward task and output design as the main remaining bottleneck, rather than model size by itself.
+
 ## Mistral q4 Baseline
 
 ### Early status
@@ -285,6 +321,7 @@ Additional failure note:
 - even after tightening the gold-answer style, citation metrics remain zero on the refined TinyLlama legal-aware check
 - even after moving to a more structured two-line answer format, citation metrics remain zero in the TinyLlama structured-format check
 - the JSON-format experiment shows a small citation gain, but not enough yet to treat source-traceability as solved
+- the Mistral JSON-format comparison reinforces that source-traceability is still the main unresolved weakness across models
 - the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step
@@ -302,3 +339,4 @@ Current direction after the JSON-format check:
 
 - the JSON format is the strongest current candidate for future reruns because it is the first format that yields any measurable citation-component movement
 - the next useful step is to rerun the JSON-format experiment on a larger subset before treating the result as stable
+- the next stronger intervention should decompose source attribution into separate structured components instead of a single source string
