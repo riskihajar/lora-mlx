@@ -28,6 +28,13 @@
 - Loaded directly from Hugging Face MLX community
 - Quantization: 8-bit MLX community release
 
+### Gemma 4 text-only support target
+
+- Model: `mlx-community/gemma-4-e4b-it-4bit`
+- Loaded directly from Hugging Face MLX community
+- Quantization: 4-bit MLX community release
+- Status: text-only loading, training, and perplexity evaluation work in this repo; full generative evaluation still times out
+
 ### Training configuration
 
 - Script: `src/lora_mlx/lora.py`
@@ -97,6 +104,7 @@ These are lexical metrics, not SQL execution accuracy.
 | TinyLlama + LoRA | 1000 | 1.676 | 5.343 | 0.0000 | 0.3135 |
 | Mistral q4 + QLoRA | 1000 | 1.561 | 4.765 | 0.1600 | 0.4467 |
 | Qwen3 4B 8bit + QLoRA | 1000 | 1.217* | 3.376* | 0.1400 | 0.6946 |
+| Gemma 4 e4b 4bit + LoRA | 1000 | 4.670** | 106.661** | N/A | N/A |
 
 ## Training Notes
 
@@ -117,6 +125,8 @@ These are lexical metrics, not SQL execution accuracy.
 - Qwen3 baseline predictions were exported to `outputs/predictions/qwen3_4b_8bit_base_test_predictions.jsonl`
 - Qwen3 predictions were exported to `outputs/predictions/qwen3_4b_8bit_1000_test_predictions.jsonl`
 - Qwen3 perplexity was computed on `20` test batches for runtime reasons
+- Gemma 4 test perplexity was computed on `10` test batches for runtime reasons
+- Gemma 4 full prediction export and EM/F1 evaluation did not finish within practical runtime limits in the current environment
 
 ## Interpretation
 
@@ -132,6 +142,8 @@ These are lexical metrics, not SQL execution accuracy.
 - `F1 = 0.6946` and `PPL = 3.376` suggest Qwen3 is the best current model for near-correct SQL generation on this dataset.
 - Qwen3 does not lead Mistral q4 on exact match in this run (`0.1400` vs `0.1600`), which suggests it is often close but not always exact.
 - Across base models, `Qwen3` also starts from the strongest baseline F1.
+- Gemma 4 support is now functionally integrated for text-only LoRA workflows, but its current runtime profile makes full generative benchmarking incomplete.
+- `Test PPL = 106.661` on the limited Gemma 4 test run suggests this configuration is not yet competitive with the other three models on this dataset.
 - The largest remaining failure modes appear to be:
   - entity spelling mismatches
   - wrong target column selection
@@ -190,11 +202,31 @@ Example strong prediction from the current run:
 SELECT Nationality FROM 1-10015132-16 WHERE Player = 'Terrence Ross'
 ```
 
+## Gemma 4 Notes
+
+- Final validation loss at iteration `1000`: training completed successfully
+- Test loss: `4.670`
+- Test PPL: `106.661` computed on `10` test batches
+- Final adapter: `outputs/adapters/adapters_gemma4_e4b_4bit.npz`
+- Full baseline export was not completed
+- Full adapted export was not completed
+- EM/F1 are not reported yet because full generative evaluation repeatedly timed out
+
+Practical status in the current repo:
+
+- model loading works
+- forward pass works
+- LoRA wrapping works
+- training works
+- limited perplexity evaluation works
+- full generative export still needs a narrower or more optimized evaluation path
+
 ## Comparative Summary
 
 - `TinyLlama` is the weakest of the three but still useful to verify that the LoRA pipeline works in the standalone repo.
 - `Mistral q4` currently gives the best exact match score in this repo run.
 - `Qwen3` currently gives the best F1 and the best perplexity, which makes it the strongest option for structurally correct SQL generation.
+- `Gemma 4` is now supported by the codebase, but its benchmark is only partial, so it should not be compared head-to-head with the completed runs yet.
 - The combined picture suggests:
   - choose `Mistral q4` if exact match is the main priority in the current runs
   - choose `Qwen3` if near-correct structured output quality is the main priority
@@ -211,6 +243,7 @@ SELECT Nationality FROM 1-10015132-16 WHERE Player = 'Terrence Ross'
 - Final adapter: `outputs/adapters/adapters_tinyllama.npz`
 - Final Mistral q4 adapter: `outputs/adapters/adapters_mistral_q4.npz`
 - Final Qwen3 adapter: `outputs/adapters/adapters_qwen3_4b_8bit.npz`
+- Final Gemma 4 adapter: `outputs/adapters/adapters_gemma4_e4b_4bit.npz`
 - Exported baseline predictions: `outputs/predictions/tinyllama_base_test_predictions.jsonl`
 - Exported predictions: `outputs/predictions/tinyllama_1000_test_predictions.jsonl`
 - Exported Mistral q4 baseline predictions: `outputs/predictions/mistral_q4_base_test_predictions.jsonl`
@@ -218,11 +251,14 @@ SELECT Nationality FROM 1-10015132-16 WHERE Player = 'Terrence Ross'
 - Exported Qwen3 baseline predictions: `outputs/predictions/qwen3_4b_8bit_base_test_predictions.jsonl`
 - Exported Qwen3 predictions: `outputs/predictions/qwen3_4b_8bit_1000_test_predictions.jsonl`
 
+Notes:
+
+- `*` Qwen3 perplexity metrics were computed on `20` test batches.
+- `**` Gemma 4 perplexity metrics were computed on `10` test batches, and EM/F1 are still unavailable.
+
 ## Recommended Next Step
 
-Build the same report sections for the stronger models so the final comparison table can include:
+Decide whether to:
 
-1. `TinyLlama`
-2. `Mistral q4`
-3. `Qwen3 4B 8bit`
-4. `Gemma 4 e4b 4bit` if we choose to benchmark it on the same task
+1. keep `Gemma 4 e4b 4bit` as a partial result with training plus limited perplexity only, or
+2. add a narrower evaluation path so Gemma 4 can produce full exported predictions and EM/F1 within practical runtime limits
