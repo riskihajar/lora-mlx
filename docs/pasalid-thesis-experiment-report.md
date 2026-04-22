@@ -93,6 +93,20 @@ Initial interpretation:
 - `B vs C` shows that the Mistral adapter still remains far behind the context-based condition.
 - In this early Pasal.id setup, base Mistral q4 without context is substantially weaker than TinyLlama on the seen-split smoke test, and the partial adapter run does not close the gap enough yet.
 
+### Longer Mistral adapter check on `20` seen examples
+
+A longer Mistral adapter pass was also evaluated using `outputs/adapters/adapters_pasalid_mistral_q4_experiment_long.npz`.
+
+| Condition | Description | EM | F1 |
+| --- | --- | ---: | ---: |
+| C-long | Base model + longer LoRA adapter, no context | 0.0000 | 0.2025 |
+
+Interpretation:
+
+- The longer Mistral run improves over the earlier short adapter result (`0.2025` vs `0.1802`).
+- The gain is real but still modest.
+- Even with the longer pass, Mistral remains behind the TinyLlama adapter baseline on the seen split.
+
 ### Unseen-split smoke results on `10` examples
 
 #### TinyLlama
@@ -173,9 +187,10 @@ Additional failure note:
 - the current TinyLlama run is a first baseline, not the final adapter result for the study
 - the current Mistral q4 adapter run is only a short baseline pass and should not be treated as the final Mistral result
 - the Qwen3 unseen-split comparison still needs a smaller or more staged evaluation run to complete reliably
+- the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step
 
-1. complete a staged unseen-split evaluation for Qwen3 so all three conditions are available on both seen and unseen splits
-2. rerun a longer `Mistral q4` adapter training pass for a fairer comparison against Qwen3
-3. refine the QA bank and answer style to reduce variability and improve traceable evidence format
+1. refine the QA bank and answer style to reduce variability and improve traceable evidence format
+2. complete a staged unseen-split evaluation for Qwen3 so all three conditions are available on both seen and unseen splits
+3. only continue extending Mistral if the refined QA format suggests it can close the remaining gap
