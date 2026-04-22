@@ -226,6 +226,24 @@ Interpretation:
 - This suggests that stronger model capacity alone does not solve the source-traceability bottleneck.
 - The current evidence points toward task and output design as the main remaining bottleneck, rather than model size by itself.
 
+### Qwen3 JSON-format comparison on a `20` example seen subset
+
+Qwen3 was then evaluated on the larger JSON `answer + source` setup.
+
+| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.2041 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.3773 | 0.0000 | 0.0000 |
+| C | 0.0000 | 0.2400 | 0.0000 | 0.0000 |
+
+Interpretation:
+
+- Qwen3 preserves the same broad ordering `B > C > A`.
+- The adapter still improves over the no-context base model, but the gain is modest.
+- Citation metrics remain zero across all three conditions.
+- Compared with TinyLlama on the same JSON-format setup, Qwen3 is weaker on answer quality in all three conditions.
+- This means a stronger model does not automatically outperform the smaller baseline in the current Pasal.id experiment configuration.
+
 ### Source-component ablation on a `10` example seen subset
 
 The source field was then decomposed into explicit components:
@@ -374,6 +392,7 @@ Additional failure note:
 - the JSON-format experiment shows a small citation gain, but not enough yet to treat source-traceability as solved
 - the Mistral JSON-format comparison reinforces that source-traceability is still the main unresolved weakness across models
 - the source-component ablation suggests that decomposing citation fields is not, by itself, an effective fix for the traceability bottleneck
+- the larger Qwen3 JSON comparison reinforces that model scale alone is not fixing the traceability bottleneck or surpassing the TinyLlama baseline in this setup
 - the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
 
 ## Next Step
@@ -397,3 +416,14 @@ Updated direction after the source-component ablation:
 
 - keep JSON `answer + source` as the main candidate format going forward
 - treat the source-component setup as an ablation result rather than the primary next-step format
+
+Current model standing in the JSON `answer + source` setting:
+
+1. `TinyLlama` is currently the strongest practical baseline across A, B, and C.
+2. `Qwen3` improves over its own no-context baseline but does not overtake TinyLlama.
+3. `Mistral q4` improves with adapters but remains weaker than both TinyLlama and Qwen3 on the current JSON-format seen checks.
+
+Current bottleneck:
+
+- answer quality can improve through context and, to a lesser extent, through adapter internalization
+- source traceability remains the main unresolved weakness across all tested model sizes and output formats
