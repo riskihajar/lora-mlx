@@ -30,6 +30,7 @@ class ModelArgs:
     hidden_size_per_layer_input: Optional[int] = None
     vocab_size_per_layer_input: Optional[int] = None
     final_logit_softcapping: Optional[float] = None
+    num_kv_shared_layers: int = 0
 
     def __post_init__(self):
         if self.num_key_value_heads is None:
@@ -293,13 +294,35 @@ class GemmaAttention(nn.Module):
         self.scale = 1.0
         self.sliding_window = args.sliding_window if self.layer_type == "sliding_attention" else None
 
+        first_kv_shared_layer_idx = args.num_hidden_layers - args.num_kv_shared_layers
+        prev_layers = [] if args.layer_types is None else args.layer_types[:first_kv_shared_layer_idx]
+        self.is_kv_shared_layer = layer_idx >= first_kv_shared_layer_idx > 0
+        if self.is_kv_shared_layer:
+            self.kv_shared_layer_index = len(prev_layers) - 1 - prev_layers[::-1].index(
+                self.layer_type
+            )
+            self.store_full_length_kv = False
+        else:
+            self.kv_shared_layer_index = None
+            if prev_layers:
+                self.store_full_length_kv = layer_idx == len(prev_layers) - 1 - prev_layers[::-1].index(
+                    self.layer_type
+                )
+            else:
+                self.store_full_length_kv = False
+
         self.q_proj = nn.Linear(args.hidden_size, self.n_heads * self.head_dim, bias=False)
-        self.k_proj = nn.Linear(args.hidden_size, self.n_kv_heads * self.head_dim, bias=False)
-        self.v_proj = nn.Linear(args.hidden_size, self.n_kv_heads * self.head_dim, bias=False)
         self.o_proj = nn.Linear(self.n_heads * self.head_dim, args.hidden_size, bias=False)
         self.q_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
-        self.k_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
-        self.v_norm = RMSNormNoScale(self.head_dim, eps=args.rms_norm_eps)
+        self.k_proj = None
+        self.v_proj = None
+        self.k_norm = None
+        self.v_norm = None
+        if not self.is_kv_shared_layer:
+            self.k_proj = nn.Linear(args.hidden_size, self.n_kv_heads * self.head_dim, bias=False)
+            self.v_proj = nn.Linear(args.hidden_size, self.n_kv_heads * self.head_dim, bias=False)
+            self.k_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+            self.v_norm = RMSNormNoScale(self.head_dim, eps=args.rms_norm_eps)
 
         rope_params = None
         if args.rope_parameters is not None and self.layer_type is not None:
@@ -307,10 +330,10 @@ class GemmaAttention(nn.Module):
         rope_base = args.rope_theta if rope_params is None else rope_params.get("rope_theta", args.rope_theta)
         self.rope = nn.RoPE(self.head_dim, traditional=False, base=rope_base)
 
-    def _apply_sliding_mask(self, scores, q_len: int, k_len: int):
+    def _apply_sliding_mask(self, scores, q_len: int, k_len: int, q_offset: int = 0):
         if self.sliding_window is None:
             return scores
-        q_positions = mx.arange(q_len)[:, None]
+        q_positions = mx.arange(q_offset, q_offset + q_len)[:, None]
         k_positions = mx.arange(k_len)[None, :]
         lower = k_positions <= q_positions
         upper = (q_positions - k_positions) < self.sliding_window
@@ -318,17 +341,23 @@ class GemmaAttention(nn.Module):
         mask = mx.where(allowed, 0.0, -1e9).astype(scores.dtype)
         return scores + mask[None, None, :, :]
 
-    def __call__(self, x, mask=None, cache=None):
+    def __call__(self, x, mask=None, cache=None, shared_kv_states=None):
         B, L, _ = x.shape
         queries = self.q_proj(x).reshape(B, L, self.n_heads, self.head_dim).transpose(0, 2, 1, 3)
-        keys = self.k_proj(x).reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
-        values = self.v_proj(x).reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
 
         queries = self.q_norm(queries)
-        keys = self.k_norm(keys)
-        values = self.v_norm(values)
+        if self.is_kv_shared_layer:
+            if shared_kv_states is None or self.kv_shared_layer_index not in shared_kv_states:
+                raise ValueError(f"Missing shared KV states for layer {self.layer_idx}")
+            keys, values = shared_kv_states[self.kv_shared_layer_index]
+        else:
+            keys = self.k_proj(x).reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
+            values = self.v_proj(x).reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
+            keys = self.k_norm(keys)
+            values = self.v_norm(values)
 
-        if cache is not None:
+        offset = 0
+        if cache is not None and not self.is_kv_shared_layer:
             key_cache, value_cache = cache
             offset = key_cache.shape[2]
             queries = self.rope(queries, offset=offset)
@@ -336,9 +365,18 @@ class GemmaAttention(nn.Module):
             keys = mx.concatenate([key_cache, keys], axis=2)
             values = mx.concatenate([value_cache, values], axis=2)
         else:
-            queries = self.rope(queries)
-            keys = self.rope(keys)
+            if self.is_kv_shared_layer:
+                offset = keys.shape[2] - L
+                queries = self.rope(queries, offset=offset)
+            else:
+                queries = self.rope(queries)
+                keys = self.rope(keys)
 
+        if self.store_full_length_kv and shared_kv_states is not None:
+            shared_kv_states[self.layer_idx] = (keys, values)
+
+        cache_keys = keys
+        cache_values = values
         if self.repeats > 1:
             keys = mx.repeat(keys, self.repeats, axis=1)
             values = mx.repeat(values, self.repeats, axis=1)
@@ -346,11 +384,17 @@ class GemmaAttention(nn.Module):
         scores = (queries * self.scale) @ keys.transpose(0, 1, 3, 2)
         if mask is not None:
             scores = scores + mask.astype(scores.dtype)
-        scores = self._apply_sliding_mask(scores, queries.shape[2], keys.shape[2])
+        scores = self._apply_sliding_mask(
+            scores,
+            queries.shape[2],
+            keys.shape[2],
+            q_offset=offset,
+        )
         probs = mx.softmax(scores.astype(mx.float32), axis=-1).astype(values.dtype)
         output = probs @ values
         output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
-        return self.o_proj(output), (keys[:, : self.n_kv_heads], values[:, : self.n_kv_heads])
+        next_cache = None if self.is_kv_shared_layer else (cache_keys, cache_values)
+        return self.o_proj(output), next_cache
 
 
 class GemmaTransformerBlock(nn.Module):
@@ -378,9 +422,11 @@ class GemmaTransformerBlock(nn.Module):
                 args.hidden_size, eps=args.rms_norm_eps
             )
 
-    def __call__(self, x, per_layer_input=None, mask=None, cache=None):
+    def __call__(self, x, per_layer_input=None, mask=None, cache=None, shared_kv_states=None):
         residual = x
-        attn_out, cache = self.self_attn(self.input_layernorm(x), mask, cache)
+        attn_out, cache = self.self_attn(
+            self.input_layernorm(x), mask, cache, shared_kv_states
+        )
         x = residual + self.post_attention_layernorm(attn_out)
 
         residual = x
@@ -486,10 +532,18 @@ class GemmaModel(nn.Module):
         if cache is None:
             cache = [None] * len(self.layers)
 
+        shared_kv_states = {}
+        for layer_idx, layer_cache in enumerate(cache):
+            if layer_cache is None:
+                continue
+            attn = self.layers[layer_idx].self_attn
+            if attn.store_full_length_kv:
+                shared_kv_states[layer_idx] = layer_cache
+
         per_layer_inputs = self._get_per_layer_inputs(inputs, h)
         for e, layer in enumerate(self.layers):
             layer_input = None if per_layer_inputs is None else per_layer_inputs[:, :, e, :]
-            h, cache[e] = layer(h, layer_input, mask, cache[e])
+            h, cache[e] = layer(h, layer_input, mask, cache[e], shared_kv_states)
 
         return self.norm(h), cache
 

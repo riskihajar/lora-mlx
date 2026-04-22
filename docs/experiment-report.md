@@ -126,7 +126,8 @@ These are lexical metrics, not SQL execution accuracy.
 - Qwen3 predictions were exported to `outputs/predictions/qwen3_4b_8bit_1000_test_predictions.jsonl`
 - Qwen3 perplexity was computed on `20` test batches for runtime reasons
 - Gemma 4 test perplexity was computed on `10` test batches for runtime reasons
-- Gemma 4 full prediction export and EM/F1 evaluation did not finish within practical runtime limits in the current environment
+- Gemma 4 generation path was later debugged and made consistent for cached vs non-cached decoding on small tests
+- Gemma 4 sanity EM/F1 checks now run on small slices, but output quality remains poor
 
 ## Interpretation
 
@@ -142,8 +143,9 @@ These are lexical metrics, not SQL execution accuracy.
 - `F1 = 0.6946` and `PPL = 3.376` suggest Qwen3 is the best current model for near-correct SQL generation on this dataset.
 - Qwen3 does not lead Mistral q4 on exact match in this run (`0.1400` vs `0.1600`), which suggests it is often close but not always exact.
 - Across base models, `Qwen3` also starts from the strongest baseline F1.
-- Gemma 4 support is now functionally integrated for text-only LoRA workflows, but its current runtime profile makes full generative benchmarking incomplete.
-- `Test PPL = 106.661` on the limited Gemma 4 test run suggests this configuration is not yet competitive with the other three models on this dataset.
+- Gemma 4 support is now functionally integrated for text-only LoRA workflows, including a repaired generation path for small-sample evaluation.
+- `Test PPL = 106.661` on the limited Gemma 4 test run and the poor small-slice EM/F1 results suggest this configuration is not competitive with the other three models on this dataset.
+- After the decode-path fix, Gemma 4 no longer appears blocked by a broken cache path; it now appears limited mainly by poor task alignment on this WikiSQL-style setup.
 - The largest remaining failure modes appear to be:
   - entity spelling mismatches
   - wrong target column selection
@@ -208,9 +210,10 @@ SELECT Nationality FROM 1-10015132-16 WHERE Player = 'Terrence Ross'
 - Test loss: `4.670`
 - Test PPL: `106.661` computed on `10` test batches
 - Final adapter: `outputs/adapters/adapters_gemma4_e4b_4bit.npz`
-- Full baseline export was not completed
-- Full adapted export was not completed
-- EM/F1 are not reported yet because full generative evaluation repeatedly timed out
+- Cached and non-cached tiny-rollout generation now match after decode-path fixes
+- Base sanity eval on `10` examples: `EM = 0.0000`, `F1 = 0.0993`
+- Adapted sanity eval on `10` examples: `EM = 0.0000`, `F1 = 0.0757`
+- Full `100` example generative benchmark is still not reported
 
 Practical status in the current repo:
 
@@ -219,14 +222,16 @@ Practical status in the current repo:
 - LoRA wrapping works
 - training works
 - limited perplexity evaluation works
-- full generative export still needs a narrower or more optimized evaluation path
+- generation correctness is substantially improved on small tests
+- small-slice EM/F1 evaluation now works
+- the main remaining issue is poor SQL output quality rather than a fully broken generation path
 
 ## Comparative Summary
 
 - `TinyLlama` is the weakest of the three but still useful to verify that the LoRA pipeline works in the standalone repo.
 - `Mistral q4` currently gives the best exact match score in this repo run.
 - `Qwen3` currently gives the best F1 and the best perplexity, which makes it the strongest option for structurally correct SQL generation.
-- `Gemma 4` is now supported by the codebase, but its benchmark is only partial, so it should not be compared head-to-head with the completed runs yet.
+- `Gemma 4` is now supported by the codebase and can be sanity-evaluated after the decode fix, but its current task performance is too weak to justify a full head-to-head benchmark yet.
 - The combined picture suggests:
   - choose `Mistral q4` if exact match is the main priority in the current runs
   - choose `Qwen3` if near-correct structured output quality is the main priority
@@ -254,11 +259,11 @@ Practical status in the current repo:
 Notes:
 
 - `*` Qwen3 perplexity metrics were computed on `20` test batches.
-- `**` Gemma 4 perplexity metrics were computed on `10` test batches, and EM/F1 are still unavailable.
+- `**` Gemma 4 perplexity metrics were computed on `10` test batches; later sanity EM/F1 checks on `10` examples showed `EM = 0.0000` and very weak `F1`.
 
 ## Recommended Next Step
 
 Decide whether to:
 
-1. keep `Gemma 4 e4b 4bit` as a partial result with training plus limited perplexity only, or
-2. add a narrower evaluation path so Gemma 4 can produce full exported predictions and EM/F1 within practical runtime limits
+1. keep `Gemma 4 e4b 4bit` as a documented partial result with fixed generation but poor task quality, or
+2. investigate Gemma-specific prompt or LoRA-target changes before spending more time on a full benchmark

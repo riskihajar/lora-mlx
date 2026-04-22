@@ -185,7 +185,7 @@ def load(path_or_hf_repo: str, tokenizer_config={}):
             class_predicate=class_predicate,
         )
 
-    model.load_weights(list(weights.items()))
+    model.load_weights(list(weights.items()), strict=False)
 
     mx.eval(model.parameters())
     tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -222,4 +222,5 @@ def generate(
         logits, cache = model(y[None], cache=cache)
         logits = logits[:, -1, :]
         y = sample(logits)
+        mx.eval(y)
         yield y

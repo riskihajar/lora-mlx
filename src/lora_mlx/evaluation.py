@@ -14,7 +14,8 @@ from .paths import DEFAULT_ADAPTERS_DIR, DEFAULT_DATA_DIR
 def apply_lora_layers(model, lora_layers):
     for layer in model.model.layers[len(model.model.layers) - lora_layers :]:
         layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
-        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        if layer.self_attn.v_proj is not None:
+            layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
         if hasattr(layer, "block_sparse_moe"):
             layer.block_sparse_moe.gate = LoRALinear.from_linear(
                 layer.block_sparse_moe.gate
@@ -52,6 +53,24 @@ def build_parser():
         default=5,
         help="Number of examples to print as preview",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional maximum number of examples to evaluate",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Number of examples to skip before evaluation",
+    )
+    parser.add_argument(
+        "--stop-strings",
+        nargs="*",
+        default=["\nQ:", "\nA:", "table:", "columns:"],
+        help="Stop generation early if decoded text contains any of these strings",
+    )
     return parser
 
 
@@ -72,9 +91,35 @@ def prepare_model(model_path, adapter_file=None, lora_layers=4):
     return model, tokenizer
 
 
-def generate_text(model, tokenizer, prompt, max_new_tokens=64):
+def build_stop_token_sequences(tokenizer, stop_strings):
+    sequences = []
+    for stop_string in stop_strings or []:
+        token_ids = tokenizer.encode(stop_string)
+        if token_ids:
+            sequences.append((stop_string, token_ids))
+    return sequences
+
+
+def trim_stop_sequences(text, stop_strings):
+    for stop_string in stop_strings or []:
+        stop_index = text.find(stop_string)
+        if stop_index != -1:
+            return text[:stop_index].strip()
+    return text.strip()
+
+
+def generate_text(
+    model,
+    tokenizer,
+    prompt,
+    max_new_tokens=64,
+    stop_strings=None,
+    stop_token_sequences=None,
+):
     prompt_ids = mx.array(tokenizer.encode(prompt))
     tokens = []
+    stop_strings = stop_strings or []
+    stop_token_sequences = stop_token_sequences or []
     for token, _ in zip(
         lora_utils.generate(prompt_ids, model, temp=0.0),
         range(max_new_tokens),
@@ -83,7 +128,12 @@ def generate_text(model, tokenizer, prompt, max_new_tokens=64):
         if token_id == tokenizer.eos_token_id:
             break
         tokens.append(token_id)
-    return tokenizer.decode(tokens).strip()
+        for _, stop_token_ids in stop_token_sequences:
+            if len(tokens) >= len(stop_token_ids) and tokens[-len(stop_token_ids) :] == stop_token_ids:
+                decoded = tokenizer.decode(tokens[:-len(stop_token_ids)])
+                return decoded.strip()
+    decoded = tokenizer.decode(tokens)
+    return trim_stop_sequences(decoded, stop_strings)
 
 
 def normalize_text(text):
@@ -125,6 +175,13 @@ def main():
 
     model, tokenizer = prepare_model(args.model, args.adapter_file, args.lora_layers)
     examples = [json.loads(line) for line in Path(args.data).read_text().splitlines() if line.strip()]
+    stop_token_sequences = build_stop_token_sequences(tokenizer, args.stop_strings)
+    if args.offset:
+        examples = examples[args.offset :]
+    if args.limit is not None:
+        examples = examples[: args.limit]
+    if not examples:
+        raise ValueError("No evaluation examples selected. Check --offset/--limit.")
 
     ems = []
     f1s = []
@@ -132,7 +189,14 @@ def main():
 
     for idx, example in enumerate(examples):
         prompt, gold = extract_parts(example["text"])
-        prediction = generate_text(model, tokenizer, prompt, args.max_new_tokens)
+        prediction = generate_text(
+            model,
+            tokenizer,
+            prompt,
+            args.max_new_tokens,
+            args.stop_strings,
+            stop_token_sequences,
+        )
         em = exact_match(prediction, gold)
         f1 = f1_score(prediction, gold)
         ems.append(em)
