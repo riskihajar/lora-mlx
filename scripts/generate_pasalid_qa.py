@@ -22,6 +22,9 @@ Rules:
 - Each item in the array must contain exactly these keys: question, answer, question_type, difficulty.
 - The question must be answerable from the source document unit.
 - The answer must be concise, factually grounded, and must include the source reference.
+- Prefer short declarative answers rather than bullet lists or numbered lists.
+- Do not use multiple-choice formatting.
+- End the answer with a single source sentence in the form: "Sumber: <reference>."
 - Do not invent legal facts not present in the source.
 - Use Indonesian.
 """
@@ -46,6 +49,11 @@ def build_user_prompt(unit: dict) -> str:
                     "one direct article question",
                     "one substantive legal question",
                     "one paraphrased or source-traceability question",
+                ],
+                "answer_style": [
+                    "one concise paragraph only",
+                    "no numbering or bullet points",
+                    "must end with a traceable source sentence",
                 ],
             },
         },

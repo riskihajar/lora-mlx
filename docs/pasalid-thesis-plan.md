@@ -356,10 +356,16 @@ The core design uses three main conditions and one optional supplemental conditi
 
 ### Automatic metrics
 
-- `EM`
-- token-level `F1`
+- token-level `F1` as the main quality metric
+- `EM` as a strict auxiliary metric only
 - optional `ROUGE-L`
 - optional semantic similarity scoring
+
+Note on `EM`:
+
+- `EM` should be kept for completeness and comparison, but not treated as the main proof metric.
+- In this legal QA setting, a substantively correct answer may still receive `EM = 0` because of wording variation, answer ordering, or source-format differences.
+- For that reason, the main reading of answer quality should rely more heavily on `F1` than on `EM`.
 
 ### Experimental reading dimensions
 
@@ -373,9 +379,19 @@ In the thesis narrative, automatic scores should be read together with:
 
 ### Task-specific metrics
 
-- citation accuracy
+- evidence attribution
+- evidence support rate
+- unsupported answer rate
+- citation accuracy or citation component accuracy
 - article-number accuracy
 - fact coverage for answer rubrics
+
+Operational interpretation:
+
+- `evidence attribution` measures whether the answer explicitly points to a supporting legal source
+- `evidence support rate` measures how often the answer is actually supported by the source document
+- `unsupported answer rate` measures how often the answer contains unsupported claims or hallucinated legal content
+- `citation accuracy` or `citation component accuracy` measures whether the cited regulation, year, and article are correct
 
 ### Manual evaluation
 
@@ -397,7 +413,10 @@ Because the design explicitly compares document-context inference with adapter-b
 
 - prompt length in tokens
 - average inference latency per example
+- latency `p50`
+- latency `p95`
 - tokens generated per second if available
+- memory usage if it can be measured consistently
 - qualitative memory and operational complexity differences between condition B and condition C
 
 ## Risk analysis

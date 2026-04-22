@@ -5,6 +5,7 @@
 - Goal: evaluate whether adapter-based internalization can move document knowledge into an open-weight model so the model can answer without receiving the source document at inference time.
 - Data source: Pasal.id API with local derived artifacts only.
 - Current corpus stage: verified `UU` subset with cleaned canonical document units and generated QA bank.
+- Reading note: `F1` is treated as the main answer-quality metric. `EM` is still reported, but only as a strict auxiliary metric because legal QA answers can vary in wording while remaining substantively correct.
 - Main experimental conditions:
   - `A`: base model without document context
   - `B`: base model with document context
