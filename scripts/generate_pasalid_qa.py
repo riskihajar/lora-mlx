@@ -24,7 +24,10 @@ Rules:
 - The answer must be concise, factually grounded, and must include the source reference.
 - Prefer short declarative answers rather than bullet lists or numbered lists.
 - Do not use multiple-choice formatting.
-- End the answer with a single source sentence in the form: "Sumber: <reference>."
+- End the answer with a single source sentence in the exact form: "Sumber: <reference>."
+- The source reference must exactly match the provided source_reference field.
+- Never omit the source sentence.
+- Never rewrite or paraphrase the source reference.
 - Do not invent legal facts not present in the source.
 - Use Indonesian.
 """
@@ -53,7 +56,8 @@ def build_user_prompt(unit: dict) -> str:
                 "answer_style": [
                     "one concise paragraph only",
                     "no numbering or bullet points",
-                    "must end with a traceable source sentence",
+                    "must end with an exact source sentence",
+                    "source sentence must use the exact provided source_reference",
                 ],
             },
         },
