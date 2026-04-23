@@ -183,6 +183,64 @@ Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terj
 2. perlakukan source-components sebagai hasil ablasi, bukan jalur utama lanjutan
 3. jika eksperimen diteruskan, arah paling bernilai adalah task khusus source attribution atau citation prediction, bukan sekadar memperbesar model lagi
 
+## Cabang Eksperimen Source Prediction
+
+Karena metrik citation pada task QA utama tetap sangat lemah, source attribution kemudian dipisahkan menjadi task tersendiri.
+
+### Desain task
+
+- input: pertanyaan hukum
+- target: JSON sumber terstruktur berisi:
+  - `source_type`
+  - `source_number`
+  - `source_year`
+  - `source_article`
+
+### Hasil TinyLlama
+
+| Metric | Nilai |
+| --- | ---: |
+| valid_json_rate | 0.6667 |
+| source_exact_match | 0.2857 |
+| source_component_score | 0.5357 |
+| source_type_accuracy | 0.6667 |
+| source_number_accuracy | 0.3333 |
+| source_year_accuracy | 0.6667 |
+| source_article_accuracy | 0.4762 |
+
+Interpretasi:
+
+- TinyLlama sudah mampu memprediksi sebagian citation dengan benar ketika source attribution dijadikan task utama.
+- Meskipun `source_exact_match` masih terbatas, `source_component_score` menunjukkan bahwa sebagian komponen sumber sering berhasil diprediksi dengan benar.
+
+### Hasil Mistral q4
+
+| Metric | Nilai |
+| --- | ---: |
+| valid_json_rate | 0.9048 |
+| source_exact_match | 0.3333 |
+| source_component_score | 0.7262 |
+| source_type_accuracy | 0.9048 |
+| source_number_accuracy | 0.4286 |
+| source_year_accuracy | 0.9048 |
+| source_article_accuracy | 0.6667 |
+
+Interpretasi:
+
+- Pada task source prediction, Mistral q4 lebih kuat daripada TinyLlama.
+- Ini menunjukkan bahwa model yang belum tentu paling kuat pada answer generation bisa menjadi model yang lebih baik untuk attribution sumber.
+
+### Makna untuk eksperimen
+
+- Hasil ini menunjukkan bahwa answer generation dan source attribution sebaiknya tidak diperlakukan sebagai satu kemampuan tunggal.
+- Pada eksperimen saat ini, QA utama lebih cocok untuk menilai internalisasi isi jawaban.
+- Task source prediction lebih cocok untuk menilai internalisasi attribution sumber.
+
+### Implikasi tesis
+
+- Jika citation metrics pada task QA utama tetap rendah, itu tidak lagi berarti source attribution gagal total.
+- Sebaliknya, hasil source-prediction menunjukkan bahwa kemampuan attribution dapat muncul secara bermakna ketika task diformulasikan secara lebih langsung.
+
 ## Eksperimen Source Prediction
 
 Karena citation metrics pada task QA utama tetap rendah, task source attribution kemudian dipisahkan menjadi task tersendiri.
