@@ -182,3 +182,45 @@ Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terj
 1. pertahankan format JSON `answer + source` sebagai format utama eksperimen berikutnya
 2. perlakukan source-components sebagai hasil ablasi, bukan jalur utama lanjutan
 3. jika eksperimen diteruskan, arah paling bernilai adalah task khusus source attribution atau citation prediction, bukan sekadar memperbesar model lagi
+
+## Eksperimen Source Prediction
+
+Karena citation metrics pada task QA utama tetap rendah, task source attribution kemudian dipisahkan menjadi task tersendiri.
+
+### Desain task
+
+- input: pertanyaan hukum
+- target: JSON sumber terstruktur berisi:
+  - `source_type`
+  - `source_number`
+  - `source_year`
+  - `source_article`
+
+### Baseline TinyLlama
+
+Dataset source-prediction dibangun dari QA bank JSON yang lebih besar dan dievaluasi dengan evaluator khusus source prediction.
+
+Hasil baseline TinyLlama:
+
+| Metric | Nilai |
+| --- | ---: |
+| valid_json_rate | 0.6667 |
+| source_exact_match | 0.2857 |
+| source_component_score | 0.5357 |
+| source_type_accuracy | 0.6667 |
+| source_number_accuracy | 0.3333 |
+| source_year_accuracy | 0.6667 |
+| source_article_accuracy | 0.4762 |
+
+Interpretasi:
+
+- Ketika source attribution dijadikan task tersendiri, metrik sumber akhirnya bergerak secara nyata.
+- `source_exact_match` memang belum tinggi, tetapi sudah cukup untuk menunjukkan bahwa model mampu memprediksi sebagian citation dengan benar.
+- `source_component_score` yang berada di atas `0.5` menunjukkan bahwa prediksi sumber parsial cukup sering benar, terutama pada jenis aturan dan tahun.
+- Ini memperkuat pemisahan dua kemampuan: kualitas jawaban dapat dipelajari dalam task QA, sedangkan kualitas attribution sumber lebih efektif dipelajari sebagai task khusus.
+
+Implikasi untuk narasi tesis:
+
+- task QA utama lebih tepat dipakai untuk menilai internalisasi isi jawaban
+- task source prediction lebih tepat dipakai untuk menilai internalisasi attribution sumber
+- dengan demikian, citation metrics yang sebelumnya nol pada QA utama tidak lagi menjadi dead end, tetapi dialihkan ke branch evaluasi yang lebih tepat sasaran
