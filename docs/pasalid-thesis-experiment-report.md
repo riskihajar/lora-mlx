@@ -183,6 +183,70 @@ Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terj
 2. perlakukan source-components sebagai hasil ablasi, bukan jalur utama lanjutan
 3. jika eksperimen diteruskan, arah paling bernilai adalah task khusus source attribution atau citation prediction, bukan sekadar memperbesar model lagi
 
+## Rekomendasi Setup Utama Tesis
+
+Berdasarkan seluruh eksperimen yang sudah dijalankan, setup yang paling layak diposisikan sebagai **eksperimen utama tesis** saat ini adalah sebagai berikut.
+
+### Eksperimen utama 1: QA tanpa dokumen sumber saat inferensi
+
+- objective: menguji apakah adapter dapat menginternalisasi isi dokumen sehingga jawaban tanpa konteks tetap lebih baik daripada baseline no-context
+- dataset format: JSON `answer + source`
+- model utama: `TinyLlama`
+- kondisi utama yang dilaporkan:
+  - `A`: base tanpa konteks
+  - `B`: base dengan konteks dokumen
+  - `C`: base + adapter tanpa konteks
+- metrik utama:
+  - `F1`
+- metrik tambahan:
+  - `EM`
+  - `Citation EM`
+  - `Citation Component Score`
+  - metrik efisiensi inferensi
+
+Alasan pemilihan:
+
+- TinyLlama adalah model yang paling konsisten memberi sinyal internalisasi pada branch QA utama.
+- Format JSON `answer + source` adalah format yang paling stabil untuk menjaga kualitas jawaban sekaligus tetap memungkinkan evaluasi traceability.
+
+### Eksperimen utama 2: source prediction
+
+- objective: menguji apakah attribution sumber dapat diinternalisasi ketika dijadikan task eksplisit
+- dataset format: source prediction JSON
+- model utama: `Mistral q4`
+- metrik utama:
+  - `source_exact_match`
+  - `source_component_score`
+
+Alasan pemilihan:
+
+- Mistral q4 memberi `source_component_score` tertinggi, sehingga paling cocok untuk mewakili branch attribution sumber.
+- Branch ini melengkapi branch QA utama dengan menunjukkan bahwa source attribution lebih efektif dipelajari sebagai task tersendiri.
+
+### Posisi eksperimen lain
+
+- `Qwen3` diposisikan sebagai pembanding model yang lebih kuat, bukan sebagai kandidat utama saat ini.
+- format dua-baris dan source-components diposisikan sebagai eksperimen ablasi atau eksperimen pendukung.
+- review manual seed diposisikan sebagai bukti awal operasional untuk akuntabilitas jawaban, bukan hasil final.
+
+## Pemisahan Bukti Utama dan Bukti Pendukung
+
+### Bukti utama
+
+- hasil A/B/C TinyLlama pada setup JSON `answer + source`
+- hasil source prediction Mistral q4
+- benchmark efisiensi inferensi dasar untuk A/B/C
+
+### Bukti pendukung
+
+- eksperimen Qwen3
+- eksperimen Mistral pada QA utama
+- eksperimen format dua-baris
+- eksperimen source-components
+- seed manual review
+
+Dengan pemisahan ini, hasil tesis dapat dibangun di atas satu konfigurasi utama yang lebih bersih, sementara eksperimen lain tetap berguna untuk memperkuat pembahasan dan menjelaskan mengapa setup utama dipilih.
+
 ## Cabang Eksperimen Source Prediction
 
 Karena metrik citation pada task QA utama tetap sangat lemah, source attribution kemudian dipisahkan menjadi task tersendiri.
