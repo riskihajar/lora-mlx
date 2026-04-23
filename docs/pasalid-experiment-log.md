@@ -114,6 +114,59 @@ Tujuannya:
 - kualitas jawaban dapat meningkat tanpa konteks penuh melalui adapter
 - source traceability tetap belum stabil di seluruh model dan format
 
+## Pola Error yang Penting
+
+### Unsupported atau factually wrong answer
+
+Contoh khas:
+
+- pertanyaan tentang definisi wilayah atau entitas hukum dijawab dengan kalimat absurd seperti:
+  - `Kabupaten Merangin adalah bahaya yang diatur dalam Pasal 1`
+
+Makna error ini:
+
+- model masih bisa mempertahankan sebagian pola permukaan seperti `X adalah ... dalam Pasal ...`
+- tetapi gagal menjaga isi faktual yang benar
+- ini menunjukkan semantic corruption, bukan sekadar variasi wording
+
+Implikasi evaluasi:
+
+- contoh seperti ini tidak boleh dibaca sebagai sekadar `EM = 0`
+- contoh ini harus diperlakukan sebagai `unsupported answer` atau `factually wrong answer`
+- kasus seperti ini memperkuat alasan mengapa metrik lexical saja tidak cukup untuk eksperimen ini
+
+### Kategori error kerja
+
+- `supported-correct`
+  - jawaban benar secara substansi dan didukung dokumen
+- `supported-partial`
+  - jawaban sebagian benar tetapi tidak lengkap atau kurang presisi
+- `unsupported-answer`
+  - jawaban tampak menjawab, tetapi tidak didukung oleh dokumen sumber
+- `factually-wrong`
+  - jawaban bertentangan dengan isi dokumen atau mengandung isi absurd
+- `source-missing`
+  - jawaban substantif ada, tetapi attribution sumber tidak muncul atau tidak bisa diparse
+- `source-wrong`
+  - jawaban mungkin cukup baik, tetapi sumber yang dirujuk salah
+
+### Rubrik manual sederhana
+
+Untuk review manual, setiap jawaban dapat diberi tiga label ringkas:
+
+- `factual_correctness`
+  - `0` = salah atau absurd
+  - `1` = sebagian benar
+  - `2` = benar secara substansi
+- `evidence_support`
+  - `0` = tidak didukung dokumen
+  - `1` = didukung sebagian
+  - `2` = jelas didukung dokumen
+- `source_traceability`
+  - `0` = tidak ada atau salah total
+  - `1` = ada sebagian
+  - `2` = tepat dan dapat dilacak
+
 ## Metrik yang Masih Belum Bergerak
 
 - `EM` hampir selalu `0`
