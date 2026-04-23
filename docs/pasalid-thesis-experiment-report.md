@@ -300,6 +300,27 @@ Interpretasi:
 - `source_traceability_rate` yang tetap nol juga sejalan dengan lemahnya citation metrics pada task QA utama.
 - Dengan demikian, review manual memperkuat kesimpulan dari metrik otomatis, bukan bertentangan dengannya.
 
+### Seed manual review yang diperluas (`20` baris)
+
+Untuk memberi sinyal yang sedikit lebih stabil, seed manual review kemudian diperluas menjadi `20` contoh pada TinyLlama kondisi `A` di seen split.
+
+| Metric | Nilai |
+| --- | ---: |
+| factual_correctness_avg | 0.2000 |
+| evidence_support_avg | 0.2000 |
+| source_traceability_avg | 0.0000 |
+| evidence_support_rate | 0.2000 |
+| unsupported_answer_rate | 0.8000 |
+| factual_nonzero_rate | 0.2000 |
+| source_traceability_rate | 0.0000 |
+
+Interpretasi:
+
+- Hasil ini memperkuat pola dari seed review kecil sebelumnya.
+- `unsupported_answer_rate` yang mencapai `0.8000` menunjukkan bahwa tanpa konteks dokumen, baseline TinyLlama masih sering menghasilkan jawaban yang tidak cukup didukung evidence.
+- `source_traceability_rate` yang tetap `0.0000` juga selaras dengan hasil citation metrics otomatis di branch QA utama.
+- Dengan demikian, aspek akuntabilitas jawaban sekarang tidak lagi kosong: walaupun masih berbasis sample manual awal, nilainya sudah bisa dilaporkan secara operasional.
+
 ## Sintesis Akhir Antar Cabang
 
 ### Ringkasan cabang QA utama
