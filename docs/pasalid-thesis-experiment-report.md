@@ -260,6 +260,46 @@ Interpretasi:
 - Jika citation metrics pada task QA utama tetap rendah, itu tidak lagi berarti source attribution gagal total.
 - Sebaliknya, hasil source-prediction menunjukkan bahwa kemampuan attribution dapat muncul secara bermakna ketika task diformulasikan secara lebih langsung.
 
+## Efisiensi Implementasi
+
+Benchmark awal TinyLlama pada setup JSON `answer + source`, seen split, `10` contoh menghasilkan ringkasan berikut:
+
+| Kondisi | Avg Prompt Token Proxy | Avg Latency (s) | p50 (s) | p95 (s) | Peak RSS Proxy (bytes) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 27.4 | 2.3434 | 2.3434 | 2.3434 | 1201733632 |
+| B | 110.2 | 2.3609 | 2.3609 | 2.3609 | 2662760448 |
+| C | 27.4 | 3.9444 | 3.9444 | 3.9444 | 2652045312 |
+
+Interpretasi:
+
+- Kondisi `C` berhasil menurunkan kebutuhan konteks inferensi secara nyata dibanding `B`, karena panjang prompt kembali mendekati `A`.
+- Namun, pengurangan konteks tidak otomatis membuat inferensi lebih ringan pada latency maupun memory proxy.
+- Dalam benchmark awal ini, `C` justru lebih lambat daripada `A` dan `B`, serta memiliki peak RSS proxy yang mendekati `B`.
+- Artinya, manfaat utama `C` saat ini lebih jelas pada pengurangan kebutuhan konteks daripada efisiensi runtime murni.
+
+## Review Manual Awal
+
+Sebagai langkah awal untuk mengisi metrik akuntabilitas jawaban, dibuat seed manual review kecil pada beberapa contoh TinyLlama.
+
+Ringkasan seed manual review (`6` baris):
+
+| Metric | Nilai |
+| --- | ---: |
+| factual_correctness_avg | 0.6667 |
+| evidence_support_avg | 0.6667 |
+| source_traceability_avg | 0.0000 |
+| evidence_support_rate | 0.3333 |
+| unsupported_answer_rate | 0.6667 |
+| factual_nonzero_rate | 0.3333 |
+| source_traceability_rate | 0.0000 |
+
+Interpretasi:
+
+- Seed review ini masih terlalu kecil untuk dijadikan hasil akhir, tetapi sudah berguna sebagai bukti bahwa metrik manual dapat dihitung secara operasional.
+- Nilai `unsupported_answer_rate` yang tinggi konsisten dengan temuan bahwa banyak jawaban masih belum cukup terikat ke evidence.
+- `source_traceability_rate` yang tetap nol juga sejalan dengan lemahnya citation metrics pada task QA utama.
+- Dengan demikian, review manual memperkuat kesimpulan dari metrik otomatis, bukan bertentangan dengannya.
+
 ## Sintesis Akhir Antar Cabang
 
 ### Ringkasan cabang QA utama
