@@ -385,6 +385,25 @@ Interpretasi:
 - `source_traceability_rate` yang tetap `0.0000` juga selaras dengan hasil citation metrics otomatis di branch QA utama.
 - Dengan demikian, aspek akuntabilitas jawaban sekarang tidak lagi kosong: walaupun masih berbasis sample manual awal, nilainya sudah bisa dilaporkan secara operasional.
 
+## Review Semi-Otomatis Berbantu LLM
+
+Untuk menghindari beban review manual penuh pada data yang lebih besar, dilakukan juga review semi-otomatis berbasis LLM sebagai alat pengelompokan awal.
+
+### TinyLlama A/B/C pada JSON `answer + source`, seen split (`20` contoh per kondisi)
+
+| Kondisi | factual_correctness_avg | evidence_support_avg | evidence_support_rate | unsupported_answer_rate | source_missing_rate | factually_wrong_rate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 0.0500 | 0.0500 | 0.0500 | 0.5500 | 0.8500 | 0.8000 |
+| B | 0.9500 | 0.9000 | 0.7000 | 0.2500 | 1.0000 | 0.2500 |
+| C | 0.1000 | 0.1000 | 0.0500 | 0.7500 | 0.9500 | 0.7500 |
+
+Interpretasi:
+
+- Hasil review semi-otomatis memperkuat pola utama bahwa kondisi `B` paling kuat tidak hanya pada F1, tetapi juga pada konsistensi faktual dan keterdukungan evidence.
+- Kondisi `A` dan `C` sama-sama masih lemah dari sisi akuntabilitas jawaban, meskipun `C` pada beberapa metrik otomatis sempat menunjukkan gain atas `A`.
+- `source_missing_rate` yang sangat tinggi pada ketiga kondisi menegaskan bahwa masalah utama tetap berada pada disiplin attribution sumber.
+- Dengan demikian, hasil review semi-otomatis tidak membatalkan metrik otomatis, tetapi justru memperkuat interpretasi bahwa branch QA utama belum cukup untuk menghasilkan jawaban yang benar sekaligus akuntabel.
+
 ## Sintesis Akhir Antar Cabang
 
 ### Ringkasan cabang QA utama

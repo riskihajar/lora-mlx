@@ -50,7 +50,14 @@ def build_user_prompt(row: dict) -> str:
 
 
 def parse_review(text: str) -> dict:
-    payload = json.loads(text)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        payload = json.loads(text[start : end + 1])
     return {
         "factual_correctness": int(payload["factual_correctness"]),
         "evidence_support": int(payload["evidence_support"]),

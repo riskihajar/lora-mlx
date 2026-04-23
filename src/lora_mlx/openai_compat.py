@@ -65,6 +65,7 @@ def generate_text(system_prompt: str, user_prompt: str) -> str:
     client, model = build_client()
     response = client.responses.create(
         model=model,
+        store=False,
         input=[
             {
                 "role": "system",
