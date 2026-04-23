@@ -150,6 +150,21 @@ Temuan utamanya:
 - Kualitas jawaban dan kualitas keterlacakan sumber saat ini terpisah secara empiris: jawaban bisa membaik tanpa diikuti attribution yang baik.
 - Memperbesar model tidak otomatis memperbaiki masalah traceability.
 
+## Temuan yang Stabil
+
+- Kondisi `B` tetap menjadi upper bound praktis terkuat di seluruh eksperimen yang sudah dijalankan.
+- Kondisi `C` dalam beberapa setup memberi peningkatan atas `A`, sehingga ada dasar untuk menyatakan internalisasi parsial pada kualitas jawaban.
+- Format JSON `answer + source` adalah format eksperimen paling layak saat ini untuk menjaga kualitas jawaban sambil tetap memungkinkan evaluasi traceability.
+- `TinyLlama` tetap menjadi baseline paling kuat pada konfigurasi Pasal.id yang sudah diuji.
+
+## Metrik yang Masih Belum Bergerak
+
+- `EM` hampir selalu tetap `0`.
+- `Citation EM` hampir selalu tetap `0`.
+- `Citation Component Score` masih lemah dan tidak stabil.
+
+Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terjadi pada kualitas isi jawaban daripada pada kedisiplinan model dalam menyebut sumber secara andal.
+
 ## Batas Klaim yang Aman
 
 - Aman untuk menyatakan bahwa adapter-based internalization dapat meningkatkan kualitas jawaban dibanding kondisi no-context pada beberapa setup.
