@@ -427,3 +427,34 @@ Current bottleneck:
 
 - answer quality can improve through context and, to a lesser extent, through adapter internalization
 - source traceability remains the main unresolved weakness across all tested model sizes and output formats
+
+## Cross-Model Synthesis
+
+### Best current reading of the experiment
+
+- Condition `B` is consistently the strongest condition across all tested models and output styles.
+- Condition `C` often improves over `A`, which supports the claim that adapter-based internalization can move some document knowledge into model parameters.
+- However, condition `C` still falls short of the context-based upper bound represented by condition `B`.
+
+### Stable answer-quality ranking in the current setup
+
+Under the most stable current setting, the practical ranking is:
+
+1. `TinyLlama`
+2. `Qwen3`
+3. `Mistral q4`
+
+This ranking is specific to the current Pasal.id-derived QA bank, split design, answer format, and limited-run adapter checkpoints.
+
+### Stable findings for thesis writing
+
+- Explicit document context remains the most reliable way to obtain the strongest legal QA performance.
+- Adapter-based internalization provides a measurable answer-quality gain over the no-context baseline in several settings.
+- The current experiments support a limited internalization claim for answer content, but not a strong claim for source-traceability behavior.
+- Citation and source-attribution remain weak even after multiple answer-format interventions.
+- Increasing model strength alone has not solved the traceability problem in the current setup.
+
+### Recommended interpretation boundary
+
+- The current evidence supports the statement that LoRA-based internalization can partially recover document knowledge for answer generation.
+- The current evidence does not support the statement that the model can yet provide reliable, machine-checkable legal source attribution without further intervention.
