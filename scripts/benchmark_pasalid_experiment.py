@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import statistics
 import subprocess
 import tempfile
@@ -53,8 +54,8 @@ def percentile(values: list[float], p: float) -> float:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
-def run_export(model: str, data_path: Path, output_path: Path, adapter_file: str | None, lora_layers: int, max_new_tokens: int) -> float:
-    command = [
+def run_export(model: str, data_path: Path, output_path: Path, adapter_file: str | None, lora_layers: int, max_new_tokens: int) -> tuple[float, int | None]:
+    inner_command = [
         "python3",
         "-m",
         "lora_mlx.export",
@@ -70,10 +71,16 @@ def run_export(model: str, data_path: Path, output_path: Path, adapter_file: str
         str(max_new_tokens),
     ]
     if adapter_file:
-        command.extend(["--adapter-file", adapter_file])
+        inner_command.extend(["--adapter-file", adapter_file])
+    command = ["/usr/bin/time", "-l", *inner_command]
     start = time.perf_counter()
-    subprocess.run(command, check=True, capture_output=True, text=True)
-    return time.perf_counter() - start
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    elapsed = time.perf_counter() - start
+    peak_rss = None
+    match = re.search(r"(\d+)\s+maximum resident set size", result.stderr)
+    if match:
+        peak_rss = int(match.group(1))
+    return elapsed, peak_rss
 
 
 def write_temp_jsonl(rows: list[dict], path: Path) -> None:
@@ -132,7 +139,7 @@ def main() -> None:
             output_path = output_dir / f"{args.preset}_{args.split}_{label}_benchmark_predictions.jsonl"
             write_temp_jsonl(cfg["rows"], data_path)
             token_counts = [prompt_token_proxy(row["text"]) for row in cfg["rows"]]
-            latency = run_export(
+            latency, peak_rss = run_export(
                 model=preset["model"],
                 data_path=data_path,
                 output_path=output_path,
@@ -150,6 +157,7 @@ def main() -> None:
                 "latency_avg_seconds": per_example,
                 "latency_p50_seconds": percentile(latencies, 0.5),
                 "latency_p95_seconds": percentile(latencies, 0.95),
+                "peak_rss_bytes_proxy": peak_rss,
             }
 
     print(json.dumps(summary, ensure_ascii=True, indent=2))
