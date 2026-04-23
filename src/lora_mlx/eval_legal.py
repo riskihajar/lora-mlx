@@ -60,6 +60,23 @@ def split_answer_and_source(text: str) -> tuple[str, str]:
     return answer, source
 
 
+def extract_source_components(text: str) -> dict[str, str]:
+    normalized = normalize_text(text)
+    if normalized.startswith("{") and normalized.endswith("}"):
+        try:
+            payload = json.loads(normalized)
+            if isinstance(payload, dict):
+                return {
+                    "type": normalize_text(str(payload.get("source_type", ""))),
+                    "number": normalize_text(str(payload.get("source_number", ""))),
+                    "year": normalize_text(str(payload.get("source_year", ""))),
+                    "article": normalize_text(str(payload.get("source_article", ""))),
+                }
+        except Exception:  # noqa: BLE001
+            pass
+    return {}
+
+
 def exact_match(left: str, right: str) -> int:
     return int(normalize_text(left) == normalize_text(right))
 
@@ -90,12 +107,32 @@ def parse_reference(text: str) -> dict[str, str]:
 
 
 def citation_exact_match(prediction_source: str, gold_source: str) -> int:
-    return int(parse_reference(prediction_source) == parse_reference(gold_source) and prediction_source != "" and gold_source != "")
+    pred_components = extract_source_components(prediction_source)
+    gold_components = extract_source_components(gold_source)
+    if pred_components and gold_components:
+        return int(pred_components == gold_components)
+    pred_ref = parse_reference(prediction_source)
+    gold_ref = parse_reference(gold_source)
+    if not any(pred_ref.values()) or not any(gold_ref.values()):
+        return 0
+    return int(pred_ref == gold_ref)
 
 
 def citation_component_score(prediction_source: str, gold_source: str) -> float:
+    pred_components = extract_source_components(prediction_source)
+    gold_components = extract_source_components(gold_source)
+    if pred_components and gold_components:
+        components = ["type", "number", "year", "article"]
+        available = [component for component in components if gold_components.get(component)]
+        if not available:
+            return 0.0
+        matches = sum(1 for component in available if pred_components.get(component) == gold_components.get(component))
+        return matches / len(available)
+
     pred = parse_reference(prediction_source)
     gold = parse_reference(gold_source)
+    if not any(gold.values()):
+        return 0.0
     components = ["type", "number", "year", "article"]
     available = [component for component in components if gold[component]]
     if not available:
