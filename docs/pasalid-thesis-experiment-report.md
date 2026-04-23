@@ -230,16 +230,58 @@ Interpretasi:
 - Pada task source prediction, Mistral q4 lebih kuat daripada TinyLlama.
 - Ini menunjukkan bahwa model yang belum tentu paling kuat pada answer generation bisa menjadi model yang lebih baik untuk attribution sumber.
 
+### Hasil Qwen3
+
+| Metric | Nilai |
+| --- | ---: |
+| valid_json_rate | 0.8095 |
+| source_exact_match | 0.3810 |
+| source_component_score | 0.6548 |
+| source_type_accuracy | 0.8095 |
+| source_number_accuracy | 0.4762 |
+| source_year_accuracy | 0.7619 |
+| source_article_accuracy | 0.5714 |
+
+Interpretasi:
+
+- Pada task source prediction, Qwen3 menghasilkan `source_exact_match` tertinggi.
+- Namun, `source_component_score` Qwen3 masih berada di bawah Mistral q4.
+- Ini menunjukkan tradeoff yang menarik: Qwen3 lebih baik pada exact citation, sedangkan Mistral lebih baik pada kecocokan komponen secara keseluruhan.
+
 ### Makna untuk eksperimen
 
 - Hasil ini menunjukkan bahwa answer generation dan source attribution sebaiknya tidak diperlakukan sebagai satu kemampuan tunggal.
 - Pada eksperimen saat ini, QA utama lebih cocok untuk menilai internalisasi isi jawaban.
 - Task source prediction lebih cocok untuk menilai internalisasi attribution sumber.
+- Ranking model juga berbeda antar cabang eksperimen, sehingga model terbaik harus dipilih sesuai objective evaluasinya.
 
 ### Implikasi tesis
 
 - Jika citation metrics pada task QA utama tetap rendah, itu tidak lagi berarti source attribution gagal total.
 - Sebaliknya, hasil source-prediction menunjukkan bahwa kemampuan attribution dapat muncul secara bermakna ketika task diformulasikan secara lebih langsung.
+
+## Sintesis Akhir Antar Cabang
+
+### Ringkasan cabang QA utama
+
+- target utama: kualitas jawaban tanpa dokumen sumber saat inferensi
+- hasil paling stabil: `B > C > A`
+- model baseline terbaik saat ini: `TinyLlama`
+- bottleneck utama: source traceability
+
+### Ringkasan cabang source prediction
+
+- target utama: prediksi sumber hukum secara eksplisit
+- semua model menghasilkan metrik yang tidak lagi nol
+- `Mistral q4` terbaik pada `source_component_score`
+- `Qwen3` terbaik pada `source_exact_match`
+
+### Kesimpulan lintas cabang
+
+- kemampuan menghasilkan jawaban dan kemampuan memberi attribution sumber adalah dua kemampuan yang berbeda.
+- eksperimen saat ini mendukung klaim bahwa internalisasi isi jawaban dapat terjadi tanpa konteks penuh.
+- eksperimen saat ini juga menunjukkan bahwa internalisasi attribution sumber lebih efektif jika diformulasikan sebagai task khusus.
+- dengan demikian, jika tujuan sistem akhir menuntut jawaban yang akuntabel, maka pendekatan dua-cabang atau dua-tahap lebih masuk akal daripada memaksa satu output generatif tunggal untuk menyelesaikan semuanya sekaligus.
 
 ## Eksperimen Source Prediction
 
