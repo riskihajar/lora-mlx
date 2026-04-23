@@ -1,191 +1,26 @@
-# Pasal.id Experiment Report
+# Laporan Eksperimen Pasal.id
 
-## Context
+## Konteks
 
-- Goal: evaluate whether adapter-based internalization can move document knowledge into an open-weight model so the model can answer without receiving the source document at inference time.
-- Data source: Pasal.id API with local derived artifacts only.
-- Current corpus stage: verified `UU` subset with cleaned canonical document units and generated QA bank.
-- Reading note: `F1` is treated as the main answer-quality metric. `EM` is still reported, but only as a strict auxiliary metric because legal QA answers can vary in wording while remaining substantively correct.
-- Main experimental conditions:
-  - `A`: base model without document context
-  - `B`: base model with document context
-  - `C`: base model with LoRA adapter, without document context
+- Tujuan eksperimen ini adalah mengevaluasi apakah internalisasi berbasis adapter dapat memindahkan pengetahuan dokumen hukum ke parameter model open-weight, sehingga model dapat menjawab pertanyaan tanpa menerima dokumen sumber saat inferensi.
+- Sumber data berasal dari API Pasal.id, tetapi yang digunakan dalam repo ini adalah artefak turunan lokal yang telah dibersihkan.
+- Tiga kondisi utama yang dibandingkan adalah:
+  - `A`: model dasar tanpa konteks dokumen
+  - `B`: model dasar dengan konteks dokumen sumber
+  - `C`: model dasar dengan adapter LoRA tanpa konteks dokumen
+- Untuk kualitas jawaban, `F1` diperlakukan sebagai metrik utama.
+- `EM` tetap dilaporkan sebagai metrik ketat tambahan, tetapi tidak dijadikan dasar utama pembuktian karena jawaban legal QA dapat berbeda bentuk permukaan meskipun substansinya benar.
 
-## Current Data Pipeline
+## Pipeline Data Saat Ini
 
-- Raw law cache: `data/pasalid_raw/`
-- Canonical document units: `data/pasalid/doc_units.jsonl`
-- Generated QA bank: `data/pasalid/qa_bank_full.jsonl`
-- Experiment split directory: `data/pasalid/experiment_split/`
+- raw cache Pasal.id: `data/pasalid_raw/`
+- canonical document units: `data/pasalid/doc_units.jsonl`
+- QA bank utama: `data/pasalid/qa_bank_full.jsonl`
+- split eksperimen utama: `data/pasalid/experiment_split/`
+- QA bank JSON `answer + source` yang lebih stabil: `data/pasalid/qa_bank_json_large.jsonl`
+- split JSON yang lebih besar: `data/pasalid/json_large_split/`
 
-Current split manifest:
-
-- total QA rows: `285`
-- train rows: `156`
-- valid rows: `21`
-- test seen rows: `78`
-- test unseen rows: `30`
-
-## TinyLlama Baseline
-
-### Training status
-
-- Model: `mlx_model`
-- Adapter: `outputs/adapters/adapters_pasalid_tinyllama_experiment.npz`
-- Training run completed to `300` iterations for the first baseline pass
-- Validation loss improved from `1.397` at iteration `1` to `1.046` at iteration `200`
-
-### Seen-split A/B/C smoke results
-
-The first larger smoke comparison was run on `20` seen-split examples.
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| A | Base model, no context | 0.0000 | 0.2596 |
-| B | Base model, with source context | 0.0000 | 0.3592 |
-| C | Base model + LoRA adapter, no context | 0.0000 | 0.3033 |
-
-## Initial Interpretation
-
-- `A vs B`: explicit document context clearly improves answer quality on the seen split.
-- `A vs C`: the adapter condition improves over the no-context baseline, which is the first sign that some document knowledge is being internalized.
-- `B vs C`: the adapter condition does not yet match the context-based condition, but it narrows the gap meaningfully in this early run.
-
-This is a useful early signal for the thesis direction because the adapter-only setting appears better than the plain no-context setting, even before any larger or stronger-model run.
-
-### Seen-split A/B/C smoke results on `20` examples
-
-The same comparison was then extended to `20` examples from the seen split.
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| A | Base model, no context | 0.0000 | 0.2596 |
-| B | Base model, with source context | 0.0000 | 0.3592 |
-| C | Base model + LoRA adapter, no context | 0.0000 | 0.3033 |
-
-Interpretation:
-
-- `B` remains the strongest of the three TinyLlama conditions.
-- `C` continues to improve over `A`, which supports the internalization direction.
-- the adapter-only condition does not yet match the context condition, but it closes part of the gap.
-
-### Legal-aware metrics on a `10` example seen subset
-
-To reduce over-reliance on strict EM, the same TinyLlama A/B/C comparison was also read through legal-aware metrics.
-
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.3003 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.4058 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.3577 | 0.0000 | 0.0000 |
-
-Interpretation:
-
-- The legal-aware `answer_f1` result reinforces the same ordering seen in the generic metric run: `B > C > A`.
-- `EM` remains uniformly zero, which supports the decision to keep `EM` only as a strict auxiliary metric.
-- Citation metrics are still zero because the current generated answers often fail to produce a parsable source reference even when part of the answer content is directionally useful.
-- This confirms that answer quality is improving faster than source-traceability quality, so citation formatting and source-attribution behavior still need targeted improvement.
-
-### Refined QA-bank legal-aware check on a `10` example seen subset
-
-After tightening the QA generation prompt so that answers should end with an exact `Sumber:` line, the TinyLlama A/B/C comparison was rerun on a refined split.
-
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.2569 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.3840 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.2663 | 0.0000 | 0.0000 |
-
-Interpretation:
-
-- The refined QA style preserves the same broad ordering: `B > C > A`.
-- The adapter condition still improves slightly over the no-context baseline, though the gap is smaller on the refined subset.
-- Citation metrics remain zero, which indicates that the main bottleneck is no longer only QA-bank formatting; the model itself is still not reliably reproducing the required citation style at inference time.
-- This is an important result for the thesis because it separates two phenomena: partial answer internalization is visible, but source-attribution behavior is still weak.
-
-### Structured answer-format check on a `10` example seen subset
-
-The QA bank was then regenerated with a stricter two-line answer format:
-
-- `Jawaban: ...`
-- `Sumber: ...`
-
-This produced a larger structured QA bank and a new structured experiment split.
-
-Structured split summary:
-
-- total rows: `120`
-- train rows: `60`
-- valid rows: `15`
-- test seen rows: `30`
-- test unseen rows: `15`
-
-TinyLlama legal-aware metrics on the structured seen subset (`10` examples):
-
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.3354 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.3637 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.3246 | 0.0000 | 0.0000 |
-
-Interpretation:
-
-- The structured answer format keeps answer quality in a usable range.
-- The broad ordering still favors the context condition, but on this structured subset the no-context base model is slightly above the adapter condition.
-- Most importantly, citation metrics still remain zero, which suggests that even stronger answer formatting alone is not enough to make the model reliably emit parseable source attribution.
-- This strengthens the interpretation that the current bottleneck is model adherence to source-format behavior, not only the wording of the gold answers.
-
-### JSON-structured answer-format check on a `10` example seen subset
-
-The answer format was then made even stricter by storing each gold answer as serialized JSON with explicit `answer` and `source` fields.
-
-JSON split summary:
-
-- total rows: `90`
-- train rows: `44`
-- valid rows: `9`
-- test seen rows: `22`
-- test unseen rows: `15`
-
-TinyLlama legal-aware metrics on the JSON seen subset (`10` examples):
-
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.3674 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.5026 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.3079 | 0.0000 | 0.0250 |
-
-Interpretation:
-
-- The JSON format preserves the expected ordering `B > A > C` on this subset.
-- `B` improves noticeably and remains the strongest condition.
-- `C` remains below `A` on this subset, so adapter-only performance is not yet recovering the quality of either the context condition or the stronger earlier TinyLlama seen result.
-- The most important movement is that `citation_component_score` becomes non-zero for `C`, which is the first sign that a more constrained answer format may help citation behavior become measurable.
-- Even so, citation performance remains very weak overall, so the source-traceability problem is not solved yet.
-
-### JSON-structured answer-format check on a `20` example seen subset
-
-The JSON-format evaluation was then rerun on a larger `20`-example seen subset.
-
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.3538 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.5196 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.3214 | 0.0000 | 0.0125 |
-
-Interpretation:
-
-- The broader subset confirms the same ordering `B > A > C`.
-- `B` remains clearly strongest, which reinforces the continued advantage of explicit document context.
-- `C` still does not overtake `A` under the current JSON-format setup.
-- Citation behavior remains weak, but the non-zero `citation_component_score` for `C` is still present on the larger subset, which suggests a small but repeatable movement rather than a one-off artifact.
-- The practical conclusion is that JSON formatting improves measurability of source behavior more than it improves the model's actual source-discipline.
-
-### Larger JSON `answer + source` rerun on a `20` example seen subset
-
-The JSON `answer + source` format was then rerun on a larger QA bank and a larger split.
-
-Larger JSON split summary:
+Ringkasan split JSON yang paling stabil saat ini:
 
 - total rows: `180`
 - train rows: `96`
@@ -193,268 +28,142 @@ Larger JSON split summary:
 - test seen rows: `48`
 - test unseen rows: `21`
 
-TinyLlama legal-aware metrics on the larger JSON seen subset (`20` examples):
+## Metrik yang Dipakai
 
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+### Kualitas jawaban
+
+- `Answer F1` sebagai metrik utama kualitas jawaban
+- `Answer EM` sebagai metrik ketat tambahan
+
+### Akuntabilitas jawaban
+
+- `Citation EM`
+- `Citation Component Score`
+
+Catatan penting:
+
+- Sampai tahap eksperimen saat ini, metrik citation masih sangat lemah pada hampir semua model dan format.
+- Artinya, eksperimen lebih kuat dalam menunjukkan kualitas internalisasi isi jawaban daripada kualitas keterlacakan sumber.
+
+## Hasil Utama yang Stabil
+
+### TinyLlama pada format JSON `answer + source`
+
+Evaluasi seen split pada `20` contoh memberikan hasil berikut:
+
+| Kondisi | Answer EM | Answer F1 | Citation EM | Citation Component Score |
 | --- | ---: | ---: | ---: | ---: |
 | A | 0.0000 | 0.3151 | 0.0000 | 0.0000 |
 | B | 0.0000 | 0.5078 | 0.0000 | 0.0000 |
 | C | 0.0000 | 0.3439 | 0.0000 | 0.0000 |
 
-Interpretation:
+Interpretasi:
 
-- The larger rerun stabilizes the expected ordering `B > C > A`.
-- `C` again improves over `A`, which strengthens the adapter-internalization signal for answer quality.
-- However, the earlier tiny non-zero citation movement does not survive on the larger subset.
-- The main conclusion is now more stable: JSON `answer + source` is the strongest current answer format for quality comparison, but source attribution remains unresolved.
+- Urutan performa stabil adalah `B > C > A`.
+- Kondisi `B` menunjukkan bahwa pemberian konteks dokumen secara eksplisit masih menjadi pendekatan terkuat.
+- Kondisi `C` mengungguli `A`, sehingga ada sinyal bahwa adapter berhasil menginternalisasi sebagian pengetahuan dokumen untuk meningkatkan kualitas jawaban.
+- Namun, peningkatan pada kualitas jawaban tidak diikuti oleh peningkatan kualitas attribution sumber.
 
-### Mistral q4 JSON-format comparison on a `10` example seen subset
+### TinyLlama pada split unseen
 
-The same JSON-format evaluation was also tested on `Mistral q4` using the longer adapter checkpoint.
+Smoke test unseen split pada `10` contoh sebelumnya menunjukkan:
 
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.2283 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.3898 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.2622 | 0.0000 | 0.0000 |
+| Kondisi | EM | F1 |
+| --- | ---: | ---: |
+| A | 0.0000 | 0.2599 |
+| B | 0.0000 | 0.2917 |
+| C | 0.0000 | 0.2412 |
 
-Interpretation:
+Interpretasi:
 
-- Mistral follows the same broad ordering `B > C > A` on the JSON-format subset.
-- `C` improves over `A`, so the adapter still captures useful answer content.
-- Unlike TinyLlama, Mistral shows no measurable citation-component movement in this JSON-format check.
-- This suggests that stronger model capacity alone does not solve the source-traceability bottleneck.
-- The current evidence points toward task and output design as the main remaining bottleneck, rather than model size by itself.
+- Keuntungan konteks masih ada pada unseen split.
+- Adapter tidak lagi mengungguli baseline no-context pada subset unseen ini.
+- Ini menunjukkan bahwa sinyal internalisasi saat ini lebih kuat pada seen-document setting daripada generalisasi ke unseen-document setting.
 
-### Qwen3 JSON-format comparison on a `20` example seen subset
+## Perbandingan Antar Model
 
-Qwen3 was then evaluated on the larger JSON `answer + source` setup.
+### Mistral q4
 
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.2041 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.3773 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.2400 | 0.0000 | 0.0000 |
+Pada setup JSON `answer + source`, seen split `10` contoh:
 
-Interpretation:
+| Kondisi | Answer F1 | Citation Component Score |
+| --- | ---: | ---: |
+| A | 0.2283 | 0.0000 |
+| B | 0.3898 | 0.0000 |
+| C | 0.2622 | 0.0000 |
 
-- Qwen3 preserves the same broad ordering `B > C > A`.
-- The adapter still improves over the no-context base model, but the gain is modest.
-- Citation metrics remain zero across all three conditions.
-- Compared with TinyLlama on the same JSON-format setup, Qwen3 is weaker on answer quality in all three conditions.
-- This means a stronger model does not automatically outperform the smaller baseline in the current Pasal.id experiment configuration.
+Catatan:
 
-### Source-component ablation on a `10` example seen subset
+- `C` masih lebih baik daripada `A`, tetapi tetap jauh di bawah `B`.
+- Mistral belum mengungguli TinyLlama pada setup Pasal.id saat ini.
+- Perpanjangan training Mistral memang memberi sedikit kenaikan, tetapi belum cukup untuk mengubah ranking model.
 
-The source field was then decomposed into explicit components:
+### Qwen3
 
-- `source_type`
-- `source_number`
-- `source_year`
-- `source_article`
+Pada setup JSON `answer + source`, seen split `20` contoh:
 
-TinyLlama legal-aware metrics on the source-component subset (`10` examples):
+| Kondisi | Answer F1 | Citation Component Score |
+| --- | ---: | ---: |
+| A | 0.2041 | 0.0000 |
+| B | 0.3773 | 0.0000 |
+| C | 0.2400 | 0.0000 |
 
-| Condition | Answer EM | Answer F1 | Citation EM | Citation Component Score |
-| --- | ---: | ---: | ---: | ---: |
-| A | 0.0000 | 0.3275 | 0.0000 | 0.0000 |
-| B | 0.0000 | 0.4839 | 0.0000 | 0.0000 |
-| C | 0.0000 | 0.2949 | 0.0000 | 0.0000 |
+Catatan:
 
-Interpretation:
+- `C` mengungguli `A`, tetapi masih tidak mendekati `B` sebaik TinyLlama.
+- Qwen3 belum menggeser TinyLlama sebagai baseline terbaik dalam konfigurasi eksperimen Pasal.id saat ini.
 
-- The source-component format keeps the same broad answer-quality ordering `B > A > C`.
-- However, decomposing the source into separate fields does not improve citation metrics at all.
-- Compared with the earlier JSON `answer + source` format, this source-component format performs worse as a traceability intervention because it removes even the small non-zero citation movement that had appeared before.
-- This makes the source-component format a useful negative result or ablation: stronger structural decomposition alone does not solve source adherence.
+### Ranking praktis saat ini
 
-## Mistral q4 Baseline
-
-### Early status
-
-- Model: `mlx_model_mistral_q4`
-- Adapter target: `outputs/adapters/adapters_pasalid_mistral_q4_experiment.npz`
-- A shortened training run was completed to `150` iterations and produced a usable adapter artifact.
-- Validation loss at iteration `1`: `1.189`
-- Train loss reached the `0.593 - 0.881` range in the completed short run.
-
-### Seen-split A/B smoke results on `20` examples
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| A | Base model, no context | 0.0000 | 0.1032 |
-| B | Base model, with source context | 0.0000 | 0.3137 |
-| C | Base model + LoRA adapter, no context | 0.0000 | 0.1802 |
-
-Initial interpretation:
-
-- `A vs B` again shows a clear benefit from providing source context at inference time.
-- `A vs C` shows that the Mistral adapter improves over the no-context baseline, but the gain is smaller than the TinyLlama gain in the current run.
-- `B vs C` shows that the Mistral adapter still remains far behind the context-based condition.
-- In this early Pasal.id setup, base Mistral q4 without context is substantially weaker than TinyLlama on the seen-split smoke test, and the partial adapter run does not close the gap enough yet.
-
-### Longer Mistral adapter check on `20` seen examples
-
-A longer Mistral adapter pass was also evaluated using `outputs/adapters/adapters_pasalid_mistral_q4_experiment_long.npz`.
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| C-long | Base model + longer LoRA adapter, no context | 0.0000 | 0.2025 |
-
-Interpretation:
-
-- The longer Mistral run improves over the earlier short adapter result (`0.2025` vs `0.1802`).
-- The gain is real but still modest.
-- Even with the longer pass, Mistral remains behind the TinyLlama adapter baseline on the seen split.
-
-### Unseen-split smoke results on `10` examples
-
-#### TinyLlama
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| A | Base model, no context | 0.0000 | 0.2599 |
-| B | Base model, with source context | 0.0000 | 0.2917 |
-| C | Base model + LoRA adapter, no context | 0.0000 | 0.2412 |
-
-Interpretation:
-
-- On the unseen split, the context benefit for TinyLlama is still present but smaller than on the seen split.
-- The adapter condition does not outperform the no-context baseline on this unseen subset.
-- This suggests the current TinyLlama adapter is showing stronger seen-document internalization than unseen-document generalization.
-
-#### Mistral q4
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| A | Base model, no context | 0.0000 | 0.0885 |
-| B | Base model, with source context | 0.0000 | 0.2684 |
-| C | Base model + LoRA adapter, no context | 0.0000 | 0.1754 |
-
-Interpretation:
-
-- Mistral again benefits strongly from context on the unseen split.
-- The adapter improves over the no-context base, but still lags far behind the context condition.
-- Like TinyLlama, the current Mistral run does not yet show strong unseen-document internalization.
-
-## Observed Failure Patterns
-
-- the base model still tends to answer with noisy, generic, or partially irrelevant continuations
-- the context-based condition often captures the right article or legal consequence, but phrasing is still messy
-- the adapter condition shows improvement, but still hallucinates unrelated references and awkward wording
-- exact match remains `0`, which suggests the current answer style is still too variable and insufficiently controlled
-- Mistral q4 without an adapter currently over-enumerates or drifts into irrelevant legal references on some Pasal.id questions
-- unseen questions about numeric legal or budget values remain difficult for both TinyLlama and Mistral without explicit context
-
-## Qwen3 Baseline
-
-### Early status
-
-- Model: `mlx-community/Qwen3-4B-8bit`
-- Adapter target: `outputs/adapters/adapters_pasalid_qwen3_experiment.npz`
-- A shortened training run was completed to `150` iterations and produced a usable adapter artifact.
-- Validation loss at iteration `1`: `1.414`
-- Train loss reached the `0.883 - 1.211` range in the short run.
-
-### Seen-split A/B/C smoke results on `10` examples
-
-| Condition | Description | EM | F1 |
-| --- | --- | ---: | ---: |
-| A | Base model, no context | 0.0000 | 0.1752 |
-| B | Base model, with source context | 0.0000 | 0.3684 |
-| C | Base model + LoRA adapter, no context | 0.0000 | 0.2411 |
-
-Interpretation:
-
-- `A vs B` again shows a strong context advantage.
-- `A vs C` shows a meaningful adapter gain over the no-context base model.
-- `B vs C` still leaves a visible gap, but the adapter moves the model toward the context-based condition.
-- In this early smoke test, Qwen3 behaves more competitively than Mistral q4 in the adapter-only condition.
-
-### Unseen-split status
-
-- Full unseen smoke checks for Qwen3 did not finish within the current command window.
-- The seen-split result is usable, but the unseen comparison for Qwen3 is still incomplete.
-
-Additional failure note:
-
-- Qwen3 still shows answer-format drift, including numbered multiple-choice style output and partial restatement of the prompt structure.
-
-## Current Limitation
-
-- some training samples are still longer than the TinyLlama context window, which may reduce training quality
-- the QA bank is generated and useful, but still needs continued quality refinement
-- the current TinyLlama run is a first baseline, not the final adapter result for the study
-- the current Mistral q4 adapter run is only a short baseline pass and should not be treated as the final Mistral result
-- the Qwen3 unseen-split comparison still needs a smaller or more staged evaluation run to complete reliably
-- even after tightening the gold-answer style, citation metrics remain zero on the refined TinyLlama legal-aware check
-- even after moving to a more structured two-line answer format, citation metrics remain zero in the TinyLlama structured-format check
-- the JSON-format experiment shows a small citation gain, but not enough yet to treat source-traceability as solved
-- the Mistral JSON-format comparison reinforces that source-traceability is still the main unresolved weakness across models
-- the source-component ablation suggests that decomposing citation fields is not, by itself, an effective fix for the traceability bottleneck
-- the larger Qwen3 JSON comparison reinforces that model scale alone is not fixing the traceability bottleneck or surpassing the TinyLlama baseline in this setup
-- the current Mistral longer run improves on the short pass, but still does not make Mistral the strongest adapter-only baseline
-
-## Next Step
-
-1. refine the QA bank and answer style to reduce variability and improve traceable evidence format
-2. complete a staged unseen-split evaluation for Qwen3 so all three conditions are available on both seen and unseen splits
-3. only continue extending Mistral if the refined QA format suggests it can close the remaining gap
-
-Refined follow-up direction:
-
-- keep the current finding that answer quality and source traceability are currently separating
-- test whether a more explicitly structured output format can improve citation metrics without losing answer quality
-
-Current direction after the JSON-format check:
-
-- the JSON format is the strongest current candidate for future reruns because it is the first format that yields any measurable citation-component movement
-- the next useful step is to rerun the JSON-format experiment on a larger subset before treating the result as stable
-- the next stronger intervention should decompose source attribution into separate structured components instead of a single source string
-
-Updated direction after the source-component ablation:
-
-- keep JSON `answer + source` as the main candidate format going forward
-- treat the source-component setup as an ablation result rather than the primary next-step format
-
-Current model standing in the JSON `answer + source` setting:
-
-1. `TinyLlama` is currently the strongest practical baseline across A, B, and C.
-2. `Qwen3` improves over its own no-context baseline but does not overtake TinyLlama.
-3. `Mistral q4` improves with adapters but remains weaker than both TinyLlama and Qwen3 on the current JSON-format seen checks.
-
-Current bottleneck:
-
-- answer quality can improve through context and, to a lesser extent, through adapter internalization
-- source traceability remains the main unresolved weakness across all tested model sizes and output formats
-
-## Cross-Model Synthesis
-
-### Best current reading of the experiment
-
-- Condition `B` is consistently the strongest condition across all tested models and output styles.
-- Condition `C` often improves over `A`, which supports the claim that adapter-based internalization can move some document knowledge into model parameters.
-- However, condition `C` still falls short of the context-based upper bound represented by condition `B`.
-
-### Stable answer-quality ranking in the current setup
-
-Under the most stable current setting, the practical ranking is:
+Dalam setup JSON `answer + source` yang paling stabil saat ini, ranking praktisnya adalah:
 
 1. `TinyLlama`
 2. `Qwen3`
 3. `Mistral q4`
 
-This ranking is specific to the current Pasal.id-derived QA bank, split design, answer format, and limited-run adapter checkpoints.
+Ranking ini spesifik untuk:
 
-### Stable findings for thesis writing
+- corpus Pasal.id-derived saat ini
+- split eksperimen saat ini
+- format jawaban yang sedang diuji
+- checkpoint adapter yang saat ini tersedia
 
-- Explicit document context remains the most reliable way to obtain the strongest legal QA performance.
-- Adapter-based internalization provides a measurable answer-quality gain over the no-context baseline in several settings.
-- The current experiments support a limited internalization claim for answer content, but not a strong claim for source-traceability behavior.
-- Citation and source-attribution remain weak even after multiple answer-format interventions.
-- Increasing model strength alone has not solved the traceability problem in the current setup.
+## Ablasi Format Jawaban
 
-### Recommended interpretation boundary
+Beberapa format jawaban telah dicoba:
 
-- The current evidence supports the statement that LoRA-based internalization can partially recover document knowledge for answer generation.
-- The current evidence does not support the statement that the model can yet provide reliable, machine-checkable legal source attribution without further intervention.
+1. jawaban naratif bebas
+2. format dua baris `Jawaban + Sumber`
+3. JSON `answer + source`
+4. source-components (`source_type`, `source_number`, `source_year`, `source_article`)
+
+Temuan utamanya:
+
+- format JSON `answer + source` adalah format yang paling layak dipertahankan untuk eksperimen lanjutan
+- format source-components tidak memperbaiki traceability, sehingga lebih tepat diperlakukan sebagai hasil ablasi negatif
+- memperketat format target jawaban membantu evaluasi, tetapi belum menyelesaikan masalah source adherence
+
+## Temuan Utama
+
+- `B` secara konsisten merupakan kondisi terkuat di semua model yang diuji.
+- `C` dalam beberapa setup mampu mengungguli `A`, yang mendukung klaim bahwa adapter dapat menginternalisasi sebagian informasi dokumen.
+- Kualitas jawaban dan kualitas keterlacakan sumber saat ini terpisah secara empiris: jawaban bisa membaik tanpa diikuti attribution yang baik.
+- Memperbesar model tidak otomatis memperbaiki masalah traceability.
+
+## Batas Klaim yang Aman
+
+- Aman untuk menyatakan bahwa adapter-based internalization dapat meningkatkan kualitas jawaban dibanding kondisi no-context pada beberapa setup.
+- Aman untuk menyatakan bahwa pendekatan context-based masih lebih kuat daripada adapter-only inference dalam eksperimen ini.
+- Belum aman untuk menyatakan bahwa model sudah mampu memberi source attribution yang reliabel dan machine-checkable tanpa intervensi tambahan.
+
+## Bottleneck Utama Saat Ini
+
+- source traceability masih menjadi kelemahan utama di seluruh model dan format yang diuji
+- sebagian sample masih cukup panjang dan berat untuk model kecil
+- kualitas QA bank sudah cukup untuk baseline, tetapi masih dapat diperbaiki lebih lanjut jika eksperimen akan diperluas
+
+## Arah Lanjutan yang Paling Rasional
+
+1. pertahankan format JSON `answer + source` sebagai format utama eksperimen berikutnya
+2. perlakukan source-components sebagai hasil ablasi, bukan jalur utama lanjutan
+3. jika eksperimen diteruskan, arah paling bernilai adalah task khusus source attribution atau citation prediction, bukan sekadar memperbesar model lagi
