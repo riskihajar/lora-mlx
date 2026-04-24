@@ -25,6 +25,10 @@ MODEL_PRESETS = {
         "model": "mlx_model",
         "adapter": "outputs/adapters/adapters_pasalid_tinyllama_final_400.npz",
     },
+    "tinyllama_native_expanded": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_tinyllama_native_expanded.npz",
+    },
     "tinyllama_hyperproto_zero": {
         "model": "mlx_model",
         "adapter": "outputs/adapters/adapters_pasalid_hyperproto_tinyllama_zero.npz",

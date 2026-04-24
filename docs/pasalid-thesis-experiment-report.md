@@ -116,6 +116,36 @@ Implikasi untuk eksperimen final:
 - Eksperimen utama tetap sebaiknya memakai QA yang sejak awal dihasilkan dalam format JSON `answer + source`, bukan konversi otomatis dari jawaban naratif.
 - Jika ingin memperbesar dataset final, langkah yang lebih tepat adalah menghasilkan native JSON QA tambahan dari `doc_units`, lalu melakukan review kualitas, bukan mengonversi QA lama secara massal.
 
+### Native JSON QA expanded dari `doc_units`
+
+Sebagai tindak lanjut, dibuat QA bank native langsung dari `data/pasalid/doc_units.jsonl` tanpa mengonversi jawaban naratif lama. Builder baru `scripts/build_pasalid_native_json_qa.py` menghasilkan target jawaban dalam format JSON `answer + source` dengan template pertanyaan yang grounded ke teks pasal.
+
+Ringkasan artefak:
+
+| Artefak | Nilai |
+| --- | ---: |
+| input doc units usable | 137 |
+| output QA rows | 439 |
+| total laws | 17 |
+| train rows | 182 |
+| valid rows | 75 |
+| test seen rows | 90 |
+| test unseen rows | 92 |
+
+File utama:
+
+- QA bank: `data/pasalid/qa_bank_json_native_expanded.jsonl`
+- split: `data/pasalid/json_native_expanded_split/`
+- config TinyLlama: `configs/pasalid_experiment_native_expanded_tinyllama.yaml`
+- train wrapper: `scripts/train_pasalid_experiment_native_expanded_tinyllama.sh`
+- eval wrapper: `scripts/eval_pasalid_experiment_native_expanded_tinyllama.sh`
+
+Interpretasi:
+
+- Dataset ini lebih layak sebagai kandidat eksperimen final daripada split konversi naratif karena jawaban dan source dibuat langsung dari unit dokumen yang sama.
+- Ukuran test seen/unseen sudah mendekati target minimal awal dan jauh lebih seimbang daripada JSON-large pilot.
+- Kelemahannya adalah sebagian pertanyaan masih template-based, sehingga tetap perlu spot-check/manual review sebelum dipakai sebagai klaim final.
+
 ### Kondisi D: adapter dengan konteks dokumen
 
 Untuk menguji apakah LoRA lebih berguna sebagai **context-use adapter** daripada pengganti konteks dokumen, ditambahkan kondisi:

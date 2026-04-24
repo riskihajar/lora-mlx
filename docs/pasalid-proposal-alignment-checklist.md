@@ -185,7 +185,10 @@ Status terbaru QA final:
 | Training TinyLlama final | ✅ | Adapter `1000` iter dan sanity-check `400` iter sudah dievaluasi |
 | Hasil `C > A` pada split final konversi | ❌ | `C` berada di bawah `A` pada seen dan unseen |
 | Status split final konversi | 🟡 | Berguna sebagai negative robustness check, tetapi belum layak menggantikan JSON-large pilot sebagai setup utama |
-| Next action QA | 🟡 | Perbesar dataset dengan native JSON QA tambahan dari `doc_units`, bukan konversi massal dari QA naratif |
+| Native JSON QA expanded dari `doc_units` | ✅ | `data/pasalid/qa_bank_json_native_expanded.jsonl` berisi `439` row dari `137` doc units dan `17` laws |
+| Split native expanded | ✅ | `data/pasalid/json_native_expanded_split/`: train `182`, valid `75`, test_seen `90`, test_unseen `92` |
+| Config/wrapper native expanded TinyLlama | ✅ | `configs/pasalid_experiment_native_expanded_tinyllama.yaml`, train/eval wrapper, dan preset export sudah ditambahkan |
+| Next action QA | 🟡 | Train TinyLlama pada split native expanded lalu bandingkan `A/B/C/D` seen dan unseen |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
