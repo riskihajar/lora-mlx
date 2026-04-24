@@ -2,7 +2,7 @@
 
 ## Konteks
 
-- Tujuan eksperimen ini adalah mengevaluasi apakah internalisasi berbasis adapter dapat memindahkan pengetahuan dokumen hukum ke parameter model open-weight, sehingga model dapat menjawab pertanyaan tanpa menerima dokumen sumber saat inferensi.
+- Tujuan eksperimen ini adalah mengevaluasi dua peran adapter LoRA pada legal QA: sebagai adapter-only internalization (`C`) yang mencoba menjawab tanpa dokumen sumber saat inferensi, dan sebagai context-use adapter (`D`) yang membantu model memakai dokumen sumber secara lebih efektif.
 - Sumber data berasal dari API Pasal.id, tetapi yang digunakan dalam repo ini adalah artefak turunan lokal yang telah dibersihkan.
 - Kondisi utama yang dibandingkan adalah:
   - `A`: model dasar tanpa konteks dokumen
@@ -18,16 +18,24 @@
 - canonical document units: `data/pasalid/doc_units.jsonl`
 - QA bank utama: `data/pasalid/qa_bank_full.jsonl`
 - split eksperimen utama: `data/pasalid/experiment_split/`
-- QA bank JSON `answer + source` yang lebih stabil: `data/pasalid/qa_bank_json_large.jsonl`
-- split JSON yang lebih besar: `data/pasalid/json_large_split/`
+- QA bank JSON `answer + source` pilot: `data/pasalid/qa_bank_json_large.jsonl`
+- split JSON pilot: `data/pasalid/json_large_split/`
+- QA bank native-expanded clean kandidat final: `data/pasalid/qa_bank_json_native_expanded_clean.jsonl`
+- split native-expanded clean kandidat final: `data/pasalid/json_native_expanded_clean_split/`
 
-Ringkasan split JSON yang paling stabil saat ini:
+Ringkasan split native-expanded clean yang paling layak menjadi kandidat final saat ini:
 
-- total rows: `180`
-- train rows: `96`
-- valid rows: `15`
-- test seen rows: `48`
-- test unseen rows: `21`
+- total rows: `432`
+- train rows: `180`
+- valid rows: `75`
+- test seen rows: `89`
+- test unseen rows: `88`
+- warning sequence >2048 token: `0` pada train/valid/test dengan konteks
+
+Catatan status split:
+
+- `json_large_split/` tetap berguna sebagai pilot yang stabil untuk A/B/C dan lintas model.
+- `json_native_expanded_clean_split/` lebih kuat sebagai kandidat final TinyLlama karena ukurannya lebih besar, split seen/unseen lebih seimbang, dan tidak memicu warning panjang token.
 
 ## Metrik yang Dipakai
 
@@ -43,10 +51,26 @@ Ringkasan split JSON yang paling stabil saat ini:
 
 Catatan penting:
 
-- Sampai tahap eksperimen saat ini, metrik citation masih sangat lemah pada hampir semua model dan format.
-- Artinya, eksperimen lebih kuat dalam menunjukkan kualitas internalisasi isi jawaban daripada kualitas keterlacakan sumber.
+- Pada A/B/C, metrik citation masih sangat lemah pada hampir semua model dan format.
+- Pada clean split, `D` mulai menaikkan `Citation Component Score`, tetapi belum cukup untuk klaim source attribution yang reliabel.
+- Artinya, eksperimen lebih kuat dalam menunjukkan peningkatan kualitas jawaban dan penggunaan konteks daripada keterlacakan sumber yang machine-checkable.
 
-## Hasil Utama yang Stabil
+## Ringkasan Terbaru
+
+Pada tahap terbaru, hasil paling penting berasal dari TinyLlama pada clean native-expanded split:
+
+| Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | D Citation Component |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen (`89`) | 0.2618 | 0.4125 | 0.2617 | 0.6518 | -0.0001 | +0.2393 | 0.3146 |
+| unseen (`88`) | 0.2720 | 0.3388 | 0.2210 | 0.4414 | -0.0510 | +0.1025 | 0.3494 |
+
+Interpretasi ringkas:
+
+- `D` adalah cabang paling kuat pada setup clean: LoRA paling berguna ketika dipakai bersama konteks dokumen.
+- `C` tidak stabil sebagai adapter-only memory; pada clean split, `C` tidak mengungguli `A`.
+- JSON-large tetap penting sebagai pilot historis, tetapi bukan lagi ringkasan hasil utama terbaru.
+
+## Hasil Utama Historis dan Ablasi
 
 ### TinyLlama pada format JSON `answer + source`
 
@@ -60,7 +84,7 @@ Evaluasi seen split pada `20` contoh memberikan hasil berikut:
 
 Interpretasi:
 
-- Urutan performa stabil adalah `B > C > A`.
+- Pada pilot JSON-large ini, urutan performa stabil adalah `B > C > A`.
 - Kondisi `B` menunjukkan bahwa pemberian konteks dokumen secara eksplisit masih menjadi pendekatan terkuat.
 - Kondisi `C` mengungguli `A`, sehingga ada sinyal bahwa adapter berhasil menginternalisasi sebagian pengetahuan dokumen untuk meningkatkan kualitas jawaban.
 - Namun, peningkatan pada kualitas jawaban tidak diikuti oleh peningkatan kualitas attribution sumber.
@@ -326,20 +350,22 @@ Catatan:
 - `C` mengungguli `A`, tetapi masih tidak mendekati `B` sebaik TinyLlama.
 - Qwen3 belum menggeser TinyLlama sebagai baseline terbaik dalam konfigurasi eksperimen Pasal.id saat ini.
 
-### Ranking praktis saat ini
+### Ranking praktis pada pilot JSON-large
 
-Dalam setup JSON `answer + source` yang paling stabil saat ini, ranking praktisnya adalah:
+Dalam setup pilot JSON `answer + source` A/B/C lama, ranking praktisnya adalah:
 
 1. `TinyLlama`
 2. `Qwen3`
 3. `Mistral q4`
 
-Ranking ini spesifik untuk:
+Ranking ini spesifik untuk pilot lama:
 
 - corpus Pasal.id-derived saat ini
-- split eksperimen saat ini
+- `json_large_split/`
 - format jawaban yang sedang diuji
 - checkpoint adapter yang saat ini tersedia
+
+Catatan: ranking ini tidak boleh dibaca sebagai ranking final seluruh eksperimen karena clean native-expanded dan kondisi `D` mengubah fokus utama menjadi context-use adaptation pada TinyLlama.
 
 ## Ablasi Format Jawaban
 
@@ -360,31 +386,31 @@ Temuan utamanya:
 
 - `B` secara konsisten lebih kuat daripada adapter-only `C` sebagai baseline konteks eksplisit.
 - `C` dalam beberapa setup mampu mengungguli `A`, yang mendukung klaim bahwa adapter dapat menginternalisasi sebagian informasi dokumen.
-- `D` memperlihatkan sinyal context-use adaptation pada TinyLlama dan Mistral q4 long, tetapi tidak pada Qwen3.
+- `D` memperlihatkan sinyal context-use adaptation pada TinyLlama dan Mistral q4 long, tetapi tidak pada Qwen3; pada clean TinyLlama, `D` menjadi cabang QA paling kuat.
 - Kualitas jawaban dan kualitas keterlacakan sumber saat ini terpisah secara empiris: jawaban bisa membaik tanpa diikuti attribution yang baik.
 - Memperbesar model tidak otomatis memperbaiki masalah traceability.
 
 ## Temuan yang Stabil
 
 - Kondisi `B` tetap menjadi upper bound praktis untuk adapter-only inference (`C`) di seluruh eksperimen yang sudah dijalankan.
-- Kondisi `C` dalam beberapa setup memberi peningkatan atas `A`, sehingga ada dasar untuk menyatakan internalisasi parsial pada kualitas jawaban.
-- Kondisi `D` layak dilaporkan sebagai cabang tambahan karena menunjukkan bahwa LoRA bisa membantu penggunaan konteks pada sebagian model.
+- Kondisi `C` dalam beberapa setup memberi peningkatan atas `A`, tetapi hasil clean menunjukkan internalisasi adapter-only belum stabil.
+- Kondisi `D` layak menjadi cabang QA utama terbaru karena clean TinyLlama menunjukkan gain besar atas `B` pada seen dan unseen.
 - Format JSON `answer + source` adalah format eksperimen paling layak saat ini untuk menjaga kualitas jawaban sambil tetap memungkinkan evaluasi traceability.
-- `TinyLlama` tetap menjadi baseline paling kuat pada konfigurasi Pasal.id yang sudah diuji.
+- `TinyLlama` tetap menjadi baseline paling kuat untuk konfigurasi clean yang sudah diuji mendalam.
 
 ## Metrik yang Masih Belum Bergerak
 
 - `EM` hampir selalu tetap `0`.
 - `Citation EM` hampir selalu tetap `0`.
-- `Citation Component Score` masih lemah dan tidak stabil.
+- `Citation Component Score` masih lemah pada A/B/C, tetapi mulai bergerak pada `D` clean TinyLlama.
 
-Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terjadi pada kualitas isi jawaban daripada pada kedisiplinan model dalam menyebut sumber secara andal.
+Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terjadi pada kualitas isi jawaban dan penggunaan konteks daripada pada kedisiplinan model dalam menyebut sumber secara andal.
 
 ## Batas Klaim yang Aman
 
-- Aman untuk menyatakan bahwa adapter-based internalization dapat meningkatkan kualitas jawaban dibanding kondisi no-context pada beberapa setup.
+- Aman untuk menyatakan bahwa adapter-based internalization dapat meningkatkan kualitas jawaban dibanding kondisi no-context pada beberapa setup, tetapi tidak stabil pada clean split.
 - Aman untuk menyatakan bahwa pendekatan context-based masih lebih kuat daripada adapter-only inference dalam eksperimen ini.
-- Aman untuk menyatakan bahwa adapter dengan konteks (`D`) memberi sinyal positif pada sebagian model, tetapi efeknya belum universal.
+- Aman untuk menyatakan bahwa adapter dengan konteks (`D`) memberi sinyal positif pada sebagian model dan menjadi hasil QA terkuat pada clean TinyLlama, tetapi efeknya belum universal.
 - Belum aman untuk menyatakan bahwa model sudah mampu memberi source attribution yang reliabel dan machine-checkable tanpa intervensi tambahan.
 
 ## Bottleneck Utama Saat Ini
@@ -395,23 +421,25 @@ Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terj
 
 ## Arah Lanjutan yang Paling Rasional
 
-1. pertahankan format JSON `answer + source` sebagai format utama eksperimen berikutnya
-2. perlakukan source-components sebagai hasil ablasi, bukan jalur utama lanjutan
-3. jika eksperimen diteruskan, arah paling bernilai adalah task khusus source attribution atau citation prediction, bukan sekadar memperbesar model lagi
+1. pertahankan clean native-expanded JSON `answer + source` sebagai kandidat setup QA final
+2. posisikan `D` sebagai cabang utama context-use adaptation dan `C` sebagai stress test adapter-only internalization
+3. perlakukan source-components sebagai hasil ablasi, bukan jalur utama lanjutan
+4. jika eksperimen diteruskan, arah paling bernilai adalah review final B/D, task khusus source attribution atau citation prediction, dan validasi lintas model, bukan sekadar memperbesar model lagi
 
 ## Rekomendasi Setup Utama Tesis
 
 Berdasarkan seluruh eksperimen yang sudah dijalankan, setup yang paling layak diposisikan sebagai **eksperimen utama tesis** saat ini adalah sebagai berikut.
 
-### Eksperimen utama 1: QA tanpa dokumen sumber saat inferensi
+### Eksperimen utama 1: QA context-use adaptation
 
-- objective: menguji apakah adapter dapat menginternalisasi isi dokumen sehingga jawaban tanpa konteks tetap lebih baik daripada baseline no-context
-- dataset format: JSON `answer + source`
+- objective: menguji apakah adapter LoRA dapat membantu model menggunakan dokumen sumber secara lebih efektif daripada baseline context-only
+- dataset format: clean native-expanded JSON `answer + source`
 - model utama: `TinyLlama`
 - kondisi utama yang dilaporkan:
   - `A`: base tanpa konteks
   - `B`: base dengan konteks dokumen
   - `C`: base + adapter tanpa konteks
+  - `D`: base + adapter + konteks dokumen
 - metrik utama:
   - `F1`
 - metrik tambahan:
@@ -422,7 +450,8 @@ Berdasarkan seluruh eksperimen yang sudah dijalankan, setup yang paling layak di
 
 Alasan pemilihan:
 
-- TinyLlama adalah model yang paling konsisten memberi sinyal internalisasi pada branch QA utama.
+- Clean native-expanded TinyLlama memberi hasil QA paling kuat pada `D`, tanpa warning sequence >2048 token.
+- Kondisi `C` tetap penting sebagai stress test adapter-only internalization, tetapi bukan klaim utama karena tidak stabil pada clean split.
 - Format JSON `answer + source` adalah format yang paling stabil untuk menjaga kualitas jawaban sekaligus tetap memungkinkan evaluasi traceability.
 
 ### Eksperimen utama 2: source prediction
@@ -443,20 +472,21 @@ Alasan pemilihan:
 
 - `Qwen3` diposisikan sebagai pembanding model yang lebih kuat, bukan sebagai kandidat utama saat ini.
 - format dua-baris dan source-components diposisikan sebagai eksperimen ablasi atau eksperimen pendukung.
-- review manual seed diposisikan sebagai bukti awal operasional untuk akuntabilitas jawaban, bukan hasil final.
+- review manual/LLM seed diposisikan sebagai bukti awal operasional untuk akuntabilitas jawaban, bukan hasil final.
 
 ## Pemisahan Bukti Utama dan Bukti Pendukung
 
 ### Bukti utama
 
-- hasil A/B/C TinyLlama pada setup JSON `answer + source`
+- hasil A/B/C/D TinyLlama pada clean native-expanded JSON `answer + source`
 - hasil source prediction Mistral q4
-- benchmark efisiensi inferensi dasar untuk A/B/C
+- benchmark efisiensi inferensi per-example untuk A/B/C/D
 
 ### Bukti pendukung
 
 - eksperimen Qwen3
 - eksperimen Mistral pada QA utama
+- hasil JSON-large pilot
 - eksperimen format dua-baris
 - eksperimen source-components
 - seed manual review
@@ -598,7 +628,7 @@ Interpretasi:
 
 ## Efisiensi Implementasi
 
-Benchmark awal TinyLlama pada setup JSON `answer + source`, seen split, `10` contoh menghasilkan ringkasan berikut:
+Benchmark awal TinyLlama pada setup JSON-large `answer + source`, seen split, `10` contoh menghasilkan ringkasan berikut:
 
 | Kondisi | Avg Prompt Token Proxy | Avg Latency (s) | p50 (s) | p95 (s) | Peak RSS Proxy (bytes) |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -608,6 +638,7 @@ Benchmark awal TinyLlama pada setup JSON `answer + source`, seen split, `10` con
 
 Interpretasi:
 
+- Ini adalah benchmark proxy historis; benchmark clean per-example pada bagian native-expanded clean lebih layak dipakai untuk pembahasan final.
 - Kondisi `C` berhasil menurunkan kebutuhan konteks inferensi secara nyata dibanding `B`, karena panjang prompt kembali mendekati `A`.
 - Namun, pengurangan konteks tidak otomatis membuat inferensi lebih ringan pada latency maupun memory proxy.
 - Dalam benchmark awal ini, `C` justru lebih lambat daripada `A` dan `B`, serta memiliki peak RSS proxy yang mendekati `B`.
@@ -701,9 +732,10 @@ Interpretasi:
 
 ### Ringkasan cabang QA utama
 
-- target utama: kualitas jawaban tanpa dokumen sumber saat inferensi
-- hasil paling stabil: `B > C > A`
-- model baseline terbaik saat ini: `TinyLlama`
+- target utama terbaru: kualitas jawaban dengan adapter yang membantu penggunaan konteks dokumen (`D`)
+- stress test tambahan: kualitas jawaban tanpa dokumen sumber saat inferensi (`C`)
+- hasil clean TinyLlama: `D > B > A > C` pada unseen dan `D > B > A ~= C` pada seen
+- model baseline terbaik yang sudah diuji mendalam: `TinyLlama`
 - bottleneck utama: source traceability
 
 ### Ringkasan cabang source prediction
@@ -716,7 +748,8 @@ Interpretasi:
 ### Kesimpulan lintas cabang
 
 - kemampuan menghasilkan jawaban dan kemampuan memberi attribution sumber adalah dua kemampuan yang berbeda.
-- eksperimen saat ini mendukung klaim bahwa internalisasi isi jawaban dapat terjadi tanpa konteks penuh.
+- eksperimen saat ini mendukung klaim terbatas bahwa internalisasi isi jawaban dapat terjadi tanpa konteks penuh pada beberapa setup, tetapi clean split menunjukkan cabang ini tidak stabil.
+- eksperimen saat ini lebih kuat mendukung klaim bahwa LoRA dapat berperan sebagai context-use adapter ketika dokumen sumber tetap diberikan.
 - eksperimen saat ini juga menunjukkan bahwa internalisasi attribution sumber lebih efektif jika diformulasikan sebagai task khusus.
 - dengan demikian, jika tujuan sistem akhir menuntut jawaban yang akuntabel, maka pendekatan dua-cabang atau dua-tahap lebih masuk akal daripada memaksa satu output generatif tunggal untuk menyelesaikan semuanya sekaligus.
 
