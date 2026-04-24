@@ -215,6 +215,38 @@ Interpretasi clean split:
 - Clean split memperkuat kesimpulan bahwa arah paling kuat saat ini adalah **LoRA sebagai context-use adapter (`D`)**, bukan adapter-only memory (`C`).
 - Karena clean split menghilangkan warning panjang token, setup ini lebih layak menjadi kandidat eksperimen final TinyLlama daripada native-expanded original.
 
+Review berbantu LLM clean `B` vs `D` pada `20` contoh per split:
+
+| Split | Δ factual D-B | Δ evidence D-B | Δ source D-B | Factual win B/D/tie | Evidence win B/D/tie | Source win B/D/tie |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| seen | +0.25 | +0.30 | +0.10 | 2/6/12 | 2/7/11 | 3/4/13 |
+| unseen | +0.10 | +0.15 | +0.35 | 4/5/11 | 4/6/10 | 3/7/10 |
+
+Makna review clean:
+
+- Berbeda dari native-expanded original, clean split menunjukkan `D` unggul pada factual/evidence/source baik seen maupun unseen.
+- Selisih factual/evidence masih moderat dan banyak tie, sehingga review manual lebih besar tetap dibutuhkan.
+- Peningkatan source traceability pada unseen lebih jelas, sejalan dengan citation component otomatis `D` yang naik ke `0.3494`.
+
+Benchmark efisiensi awal clean `A/B/C/D` dijalankan pada `10` contoh per split memakai `scripts/benchmark_pasalid_experiment.py`. Metrik token masih proxy berbasis `split()`, dan latency p50/p95 masih proxy karena script mengekspor batch kecil per kondisi, bukan mengukur setiap contoh secara terpisah.
+
+| Split | Kondisi | Avg prompt token proxy | Latency avg seconds | Peak RSS proxy |
+| --- | --- | ---: | ---: | ---: |
+| seen | A | 40.1 | 6.1568 | 2657992704 |
+| seen | B | 83.6 | 7.1348 | 2665447424 |
+| seen | C | 40.1 | 13.7218 | 1404960768 |
+| seen | D | 83.6 | 8.0383 | 2399502336 |
+| unseen | A | 63.4 | 6.1572 | 2652897280 |
+| unseen | B | 139.8 | 7.1134 | 2667282432 |
+| unseen | C | 63.4 | 13.9784 | 1393836032 |
+| unseen | D | 139.8 | 14.1087 | 1429749760 |
+
+Makna benchmark awal:
+
+- `C` memang mengurangi prompt token dibanding `B/D`, tetapi pada benchmark ini tidak memberi keuntungan latency.
+- `D` membawa kualitas paling tinggi, tetapi memakai prompt sepanjang `B` dan pada unseen latency-nya mendekati `C`.
+- Angka memory/latency masih perlu benchmark per-example yang lebih rapi sebelum dijadikan klaim efisiensi final.
+
 ### Kondisi D: adapter dengan konteks dokumen
 
 Untuk menguji apakah LoRA lebih berguna sebagai **context-use adapter** daripada pengganti konteks dokumen, ditambahkan kondisi:

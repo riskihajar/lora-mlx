@@ -21,6 +21,10 @@ MODEL_PRESETS = {
         "model": "mlx_model",
         "adapter": "outputs/adapters/adapters_pasalid_tinyllama_experiment.npz",
     },
+    "tinyllama_native_expanded_clean": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_tinyllama_native_expanded_clean.npz",
+    },
     "mistral_q4": {
         "model": "mlx_model_mistral_q4",
         "adapter": "outputs/adapters/adapters_pasalid_mistral_q4_experiment_long.npz",
@@ -90,7 +94,7 @@ def write_temp_jsonl(rows: list[dict], path: Path) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Benchmark A/B/C efficiency on Pasal.id experiment splits.")
+    parser = argparse.ArgumentParser(description="Benchmark A/B/C/D efficiency on Pasal.id experiment splits.")
     parser.add_argument("--preset", choices=sorted(MODEL_PRESETS), default="tinyllama", help="Model preset")
     parser.add_argument("--split", choices=["seen", "unseen"], default="seen", help="Experiment split")
     parser.add_argument("--experiment-dir", default=str(DEFAULT_EXPERIMENT_DIR), help="Experiment split directory")
@@ -118,6 +122,7 @@ def main() -> None:
     a_rows = load_rows(no_context_path, args.limit)
     b_rows = load_rows(with_context_path, args.limit)
     c_rows = a_rows
+    d_rows = b_rows
 
     summary = {
         "preset": args.preset,
@@ -130,6 +135,7 @@ def main() -> None:
         "A": {"rows": a_rows, "adapter": None},
         "B": {"rows": b_rows, "adapter": None},
         "C": {"rows": c_rows, "adapter": preset["adapter"]},
+        "D": {"rows": d_rows, "adapter": preset["adapter"]},
     }
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -160,7 +166,10 @@ def main() -> None:
                 "peak_rss_bytes_proxy": peak_rss,
             }
 
+    summary_path = output_dir / f"{args.preset}_{args.split}_benchmark_summary.json"
+    summary_path.write_text(json.dumps(summary, ensure_ascii=True, indent=2) + "\n")
     print(json.dumps(summary, ensure_ascii=True, indent=2))
+    print(f"summary={summary_path}")
 
 
 if __name__ == "__main__":

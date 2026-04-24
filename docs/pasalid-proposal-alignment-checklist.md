@@ -195,7 +195,9 @@ Status terbaru QA final:
 | Config/wrapper clean TinyLlama | ✅ | `configs/pasalid_experiment_native_expanded_clean_tinyllama.yaml`, train/eval wrapper, dan preset export clean sudah ditambahkan |
 | Training/evaluasi clean TinyLlama | ✅ | Seen: `C-A -0.0001`, `D-B +0.2393`; unseen: `C-A -0.0510`, `D-B +0.1025` |
 | Kesimpulan clean TinyLlama | ✅ | Clean split memperkuat `D` sebagai context-use adapter; `C` tidak stabil dan tidak layak jadi klaim utama final |
-| Next action QA | 🟡 | Jalankan review manual/LLM clean `B` vs `D` dan mulai benchmark efisiensi per-example untuk clean split |
+| Review clean `B` vs `D` | ✅ | LLM-assisted review `20` contoh/split mendukung `D` pada factual/evidence/source baik seen maupun unseen |
+| Benchmark efisiensi clean awal | 🟡 | `C` mengurangi prompt token, tetapi belum lebih cepat; `D` kualitas tinggi dengan prompt sepanjang `B` |
+| Next action QA | 🟡 | Perbaiki benchmark menjadi per-example tokenizer-based dan lakukan manual review final lebih besar |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
