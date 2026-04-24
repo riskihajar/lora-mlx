@@ -252,6 +252,33 @@ Makna review clean:
 - Selisih factual/evidence masih moderat dan banyak tie, sehingga review manual lebih besar tetap dibutuhkan.
 - Peningkatan source traceability pada unseen lebih jelas, sejalan dengan citation component otomatis `D` yang naik ke `0.3494`.
 
+### Real-case eval awal
+
+Setelah chat interaktif dicoba, ditemukan bahwa pertanyaan template seperti "dokumen ini mengatur apa" tidak menyerupai pertanyaan user legal yang natural. Untuk menguji robustness awal, dibuat builder `scripts/build_pasalid_realcase_eval.py` yang menghasilkan `60` pertanyaan user-style dari `doc_units`, misalnya pertanyaan tentang dasar aturan, sanksi, definisi, cakupan wilayah, APBN, dan penyelenggaraan pemerintahan daerah.
+
+Artefak lokal:
+
+- QA bank: `data/pasalid/realcase_eval.jsonl`
+- split: `data/pasalid/realcase_eval_split/`
+- prediction export: `outputs/predictions/pasalid_realcase_eval/`
+
+Hasil TinyLlama clean pada `60` contoh real-case:
+
+| Kondisi | Answer EM | Answer F1 | Citation EM | Citation Component Score |
+| --- | ---: | ---: | ---: | ---: |
+| A | 0.0000 | 0.1975 | 0.0000 | 0.0000 |
+| B | 0.0000 | 0.4852 | 0.0000 | 0.0042 |
+| C | 0.0000 | 0.1133 | 0.0000 | 0.0000 |
+| D | 0.1500 | 0.6616 | 0.1833 | 0.1875 |
+
+Interpretasi real-case eval:
+
+- `D` tetap menjadi kondisi terbaik pada pertanyaan yang lebih natural, sehingga sinyal context-use adaptation tidak hanya muncul pada template clean.
+- `C` jatuh di bawah `A`, sehingga adapter-only memory tidak cukup untuk pertanyaan real-case.
+- `B` membaik dengan konteks, tetapi sering tidak disiplin mengeluarkan citation JSON.
+- `D` mulai menghasilkan citation yang benar pada sebagian contoh, tetapi masih ada kasus jawaban tidak substantif atau format source_article tidak konsisten.
+- Karena real-case eval ini masih heuristic-generated dari doc units, hasilnya perlu diposisikan sebagai audit robustness awal, bukan benchmark final user-facing.
+
 Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
 
 Hasil pada `10` contoh per split:

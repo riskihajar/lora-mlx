@@ -99,7 +99,26 @@ source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.lora --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.convert --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.evaluation --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.export --help
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.pasalid --help
+```
+
+Interactive Pasal.id-style chat with model and A/B/C/D mode selection:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat
+```
+
+Inside chat, use `/suggest` to show example questions, then type a number to run one of them. You can also load suggestions from a text, JSON, or JSONL file:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --suggestions-file data/pasalid/json_native_expanded_clean_split/test_seen.jsonl
+```
+
+Useful direct mode for the current clean TinyLlama adapter:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --preset tinyllama-clean --condition D
 ```
 
 ## Default Paths
