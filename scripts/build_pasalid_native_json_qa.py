@@ -30,10 +30,12 @@ def short_topic(text: str, max_words: int = 14) -> str:
     return " ".join(words[:max_words]).strip(" ,.-")
 
 
-def is_usable(row: dict) -> bool:
+def is_usable(row: dict, max_source_chars: int) -> bool:
     source_doc = normalize_space(str(row.get("source_doc", "")))
     article = str(row.get("article_number", "")).strip()
     if len(source_doc) < 60 or not article:
+        return False
+    if max_source_chars > 0 and len(source_doc) > max_source_chars:
         return False
     lowered = source_doc.lower()
     noisy_markers = ["line truncated", "republik indonesia", " . ."]
@@ -141,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build native JSON answer+source QA from Pasal.id doc units.")
     parser.add_argument("--input", default=str(DEFAULT_DOC_UNITS), help="Input doc_units JSONL")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Output QA bank JSONL")
+    parser.add_argument("--max-source-chars", type=int, default=0, help="Optional maximum source_doc character length; 0 disables filtering")
     return parser
 
 
@@ -149,7 +152,7 @@ def main() -> None:
     input_path = Path(args.input)
     output_path = Path(args.output)
 
-    docs = [row for row in load_rows(input_path) if is_usable(row)]
+    docs = [row for row in load_rows(input_path) if is_usable(row, args.max_source_chars)]
     rows = deduplicate([qa_row for doc in docs for qa_row in build_rows_for_doc(doc)])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,6 +164,7 @@ def main() -> None:
         "input": str(input_path),
         "output": str(output_path),
         "doc_units": len(docs),
+        "max_source_chars": args.max_source_chars,
         "rows": len(rows),
         "laws": len({row["law_id"] for row in rows}),
         "question_types": sorted({row["question_type"] for row in rows}),

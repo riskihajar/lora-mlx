@@ -189,8 +189,11 @@ Status terbaru QA final:
 | Split native expanded | ✅ | `data/pasalid/json_native_expanded_split/`: train `182`, valid `75`, test_seen `90`, test_unseen `92` |
 | Config/wrapper native expanded TinyLlama | ✅ | `configs/pasalid_experiment_native_expanded_tinyllama.yaml`, train/eval wrapper, dan preset export sudah ditambahkan |
 | Training/evaluasi TinyLlama native expanded | ✅ | Seen: `C-A +0.0551`, `D-B +0.1941`; unseen: `C-A -0.0427`, `D-B +0.1145` |
-| Catatan native expanded | 🟡 | Beberapa sequence masih >2048 token; perlu pre-splitting/chunking sebelum eksperimen final terkunci |
-| Next action QA | 🟡 | Review manual/LLM subset native-expanded `B` vs `D`, lalu perbaiki chunking panjang konteks |
+| Review native expanded `B` vs `D` | ✅ | Seen mendukung `D` pada factual/evidence/source; unseen mendukung source traceability tetapi factual/evidence masih tie atau sedikit turun |
+| Catatan native expanded | 🟡 | Original split memiliki `1` train dan `4` unseen-with-context sample >2048 token |
+| Clean native expanded split | ✅ | Filter `--max-source-chars 3000` menghasilkan `432` row; semua train/valid/test with-context `0` sample >2048 token |
+| Config/wrapper clean TinyLlama | ✅ | `configs/pasalid_experiment_native_expanded_clean_tinyllama.yaml`, train/eval wrapper, dan preset export clean sudah ditambahkan |
+| Next action QA | 🟡 | Retrain TinyLlama pada clean split lalu bandingkan `A/B/C/D` dengan hasil native-expanded original |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 

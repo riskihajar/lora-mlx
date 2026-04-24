@@ -162,6 +162,45 @@ Interpretasi hasil native-expanded:
 - Citation component pada `D` naik ke sekitar `0.20`, jauh lebih baik daripada pilot tetapi masih belum cukup untuk klaim source traceability yang reliabel.
 - Native-expanded menjadi kandidat setup utama baru untuk branch context-use adaptation, sedangkan adapter-only `C` tetap perlu diposisikan sebagai internalisasi parsial yang tidak stabil di held-out law.
 
+Review berbantu LLM pada subset `20` contoh per split memberi triangulasi tambahan:
+
+| Split | Δ factual D-B | Δ evidence D-B | Δ source D-B | Factual win B/D/tie | Evidence win B/D/tie | Source win B/D/tie |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| seen | +0.25 | +0.35 | +0.30 | 4/8/8 | 4/9/7 | 4/7/9 |
+| unseen | -0.10 | 0.00 | +0.45 | 6/4/10 | 5/5/10 | 3/8/9 |
+
+Makna review native-expanded:
+
+- Pada seen split, review mendukung kenaikan `D` tidak hanya pada F1, tetapi juga factual correctness, evidence support, dan source traceability.
+- Pada unseen split, `D` terutama memperbaiki source traceability; factual/evidence belum jelas membaik walaupun F1 otomatis naik.
+- Dengan demikian, `D` layak menjadi cabang utama context-use adaptation, tetapi klaim generalisasi substantif pada unseen tetap perlu manual review lebih besar.
+
+Analisis panjang token menunjukkan sumber warning >2048 token hanya berasal dari sedikit sample panjang:
+
+| Split file | Rows | Max tokens | Over 2048 |
+| --- | ---: | ---: | ---: |
+| train | 182 | 2902 | 1 |
+| valid | 75 | 630 | 0 |
+| test_seen_with_context | 90 | 1594 | 0 |
+| test_unseen_with_context | 92 | 8870 | 4 |
+
+Untuk memperbaiki ini tanpa mengubah pipeline utama, builder native-expanded kini mendukung `--max-source-chars`. Dengan `--max-source-chars 3000`, dibuat split clean lokal:
+
+| Clean split | Rows | Max tokens | Over 2048 |
+| --- | ---: | ---: | ---: |
+| train | 180 | 1756 | 0 |
+| valid | 75 | 630 | 0 |
+| test_seen_with_context | 89 | 1076 | 0 |
+| test_unseen_with_context | 88 | 942 | 0 |
+
+Artefak clean lokal:
+
+- QA bank: `data/pasalid/qa_bank_json_native_expanded_clean.jsonl`
+- split: `data/pasalid/json_native_expanded_clean_split/`
+- config: `configs/pasalid_experiment_native_expanded_clean_tinyllama.yaml`
+- train wrapper: `scripts/train_pasalid_experiment_native_expanded_clean_tinyllama.sh`
+- export preset: `tinyllama_native_expanded_clean`
+
 ### Kondisi D: adapter dengan konteks dokumen
 
 Untuk menguji apakah LoRA lebih berguna sebagai **context-use adapter** daripada pengganti konteks dokumen, ditambahkan kondisi:
