@@ -188,7 +188,9 @@ Status terbaru QA final:
 | Native JSON QA expanded dari `doc_units` | ✅ | `data/pasalid/qa_bank_json_native_expanded.jsonl` berisi `439` row dari `137` doc units dan `17` laws |
 | Split native expanded | ✅ | `data/pasalid/json_native_expanded_split/`: train `182`, valid `75`, test_seen `90`, test_unseen `92` |
 | Config/wrapper native expanded TinyLlama | ✅ | `configs/pasalid_experiment_native_expanded_tinyllama.yaml`, train/eval wrapper, dan preset export sudah ditambahkan |
-| Next action QA | 🟡 | Train TinyLlama pada split native expanded lalu bandingkan `A/B/C/D` seen dan unseen |
+| Training/evaluasi TinyLlama native expanded | ✅ | Seen: `C-A +0.0551`, `D-B +0.1941`; unseen: `C-A -0.0427`, `D-B +0.1145` |
+| Catatan native expanded | 🟡 | Beberapa sequence masih >2048 token; perlu pre-splitting/chunking sebelum eksperimen final terkunci |
+| Next action QA | 🟡 | Review manual/LLM subset native-expanded `B` vs `D`, lalu perbaiki chunking panjang konteks |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
@@ -196,7 +198,7 @@ Status terbaru QA final:
 | --- | --- |
 | Internalization | Adapter LoRA menunjukkan internalisasi parsial karena kondisi `C` dapat melampaui `A` pada kualitas jawaban di setup tertentu |
 | Context baseline | Kondisi `B` tetap menjadi upper bound praktis terhadap adapter-only `C`; kondisi `D` diuji terpisah sebagai adapter dengan konteks |
-| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent |
+| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama, native-expanded TinyLlama, dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
 | Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
 | Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B`; klaim latency dan memory hanya boleh dibuat setelah benchmark final |

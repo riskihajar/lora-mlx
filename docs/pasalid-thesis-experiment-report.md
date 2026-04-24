@@ -146,6 +146,22 @@ Interpretasi:
 - Ukuran test seen/unseen sudah mendekati target minimal awal dan jauh lebih seimbang daripada JSON-large pilot.
 - Kelemahannya adalah sebagian pertanyaan masih template-based, sehingga tetap perlu spot-check/manual review sebelum dipakai sebagai klaim final.
 
+Training TinyLlama pada split native-expanded selesai sampai `1000` iterasi dengan adapter `outputs/adapters/adapters_pasalid_tinyllama_native_expanded.npz`. Selama training dan export masih muncul warning beberapa sequence melebihi `2048` token, sehingga hasil ini perlu dibaca bersama catatan bahwa pre-splitting/chunking masih perlu diperbaiki.
+
+Hasil otomatis `A/B/C/D`:
+
+| Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | C Citation Component | D Citation Component |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen (`90`) | 0.2533 | 0.3992 | 0.3084 | 0.5933 | +0.0551 | +0.1941 | 0.0444 | 0.2000 |
+| unseen (`92`) | 0.2698 | 0.3241 | 0.2271 | 0.4386 | -0.0427 | +0.1145 | 0.0326 | 0.2228 |
+
+Interpretasi hasil native-expanded:
+
+- Kondisi `C` mengungguli `A` pada seen, tetapi turun di bawah `A` pada unseen; ini memperkuat batas klaim adapter-only internalization.
+- Kondisi `D` mengungguli `B` dengan margin lebih besar daripada JSON-large pilot, baik pada seen maupun unseen.
+- Citation component pada `D` naik ke sekitar `0.20`, jauh lebih baik daripada pilot tetapi masih belum cukup untuk klaim source traceability yang reliabel.
+- Native-expanded menjadi kandidat setup utama baru untuk branch context-use adaptation, sedangkan adapter-only `C` tetap perlu diposisikan sebagai internalisasi parsial yang tidak stabil di held-out law.
+
 ### Kondisi D: adapter dengan konteks dokumen
 
 Untuk menguji apakah LoRA lebih berguna sebagai **context-use adapter** daripada pengganti konteks dokumen, ditambahkan kondisi:
