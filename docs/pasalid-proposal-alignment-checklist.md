@@ -193,13 +193,15 @@ Status terbaru QA final:
 | Catatan native expanded | 🟡 | Original split memiliki `1` train dan `4` unseen-with-context sample >2048 token |
 | Clean native expanded split | ✅ | Filter `--max-source-chars 3000` menghasilkan `432` row; semua train/valid/test with-context `0` sample >2048 token |
 | Config/wrapper clean TinyLlama | ✅ | `configs/pasalid_experiment_native_expanded_clean_tinyllama.yaml`, train/eval wrapper, dan preset export clean sudah ditambahkan |
-| Next action QA | 🟡 | Retrain TinyLlama pada clean split lalu bandingkan `A/B/C/D` dengan hasil native-expanded original |
+| Training/evaluasi clean TinyLlama | ✅ | Seen: `C-A -0.0001`, `D-B +0.2393`; unseen: `C-A -0.0510`, `D-B +0.1025` |
+| Kesimpulan clean TinyLlama | ✅ | Clean split memperkuat `D` sebagai context-use adapter; `C` tidak stabil dan tidak layak jadi klaim utama final |
+| Next action QA | 🟡 | Jalankan review manual/LLM clean `B` vs `D` dan mulai benchmark efisiensi per-example untuk clean split |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
 | Jenis Klaim | Formulasi Aman |
 | --- | --- |
-| Internalization | Adapter LoRA menunjukkan internalisasi parsial karena kondisi `C` dapat melampaui `A` pada kualitas jawaban di setup tertentu |
+| Internalization | Adapter LoRA menunjukkan internalisasi parsial hanya pada setup tertentu; clean split menunjukkan `C` tidak stabil dan tidak boleh menjadi klaim utama tunggal |
 | Context baseline | Kondisi `B` tetap menjadi upper bound praktis terhadap adapter-only `C`; kondisi `D` diuji terpisah sebagai adapter dengan konteks |
 | Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama, native-expanded TinyLlama, dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |

@@ -201,6 +201,20 @@ Artefak clean lokal:
 - train wrapper: `scripts/train_pasalid_experiment_native_expanded_clean_tinyllama.sh`
 - export preset: `tinyllama_native_expanded_clean`
 
+TinyLlama kemudian dilatih ulang pada clean split sampai `1000` iterasi. Training clean tidak lagi memunculkan warning sequence >2048 token. Hasil otomatis `A/B/C/D`:
+
+| Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | C Citation Component | D Citation Component |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen (`89`) | 0.2618 | 0.4125 | 0.2617 | 0.6518 | -0.0001 | +0.2393 | 0.0309 | 0.3146 |
+| unseen (`88`) | 0.2720 | 0.3388 | 0.2210 | 0.4414 | -0.0510 | +0.1025 | 0.0057 | 0.3494 |
+
+Interpretasi clean split:
+
+- Setelah sample panjang dihapus, `D` tetap sangat kuat dan bahkan citation component naik dibanding native-expanded original.
+- Adapter-only `C` tidak lagi memberi gain atas `A`; pada unseen tetap lebih buruk daripada baseline no-context.
+- Clean split memperkuat kesimpulan bahwa arah paling kuat saat ini adalah **LoRA sebagai context-use adapter (`D`)**, bukan adapter-only memory (`C`).
+- Karena clean split menghilangkan warning panjang token, setup ini lebih layak menjadi kandidat eksperimen final TinyLlama daripada native-expanded original.
+
 ### Kondisi D: adapter dengan konteks dokumen
 
 Untuk menguji apakah LoRA lebih berguna sebagai **context-use adapter** daripada pengganti konteks dokumen, ditambahkan kondisi:
