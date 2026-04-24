@@ -1,6 +1,6 @@
 # ✅ Checklist Kesesuaian Eksperimen dengan Target Proposal
 
-Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah dibangun di repo `lora-mlx`.
+Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah dibangun di repo `lora-mlx`, sekaligus menjadi rencana kerja untuk mengubah hasil pilot menjadi eksperimen final tesis.
 
 ## Keterangan Status
 
@@ -24,13 +24,13 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | --- | --- | --- | --- | --- |
 | F1 sebagai nilai utama pembuktian | ✅ | F1 paling informatif di seluruh eksperimen QA utama | Sudah layak jadi metrik utama tesis | Pertahankan sebagai metrik utama |
 | EM sebagai pendukung kualitas jawaban | ✅ | EM sudah dihitung konsisten, tetapi hampir selalu `0` | Tetap berguna sebagai metrik ketat tambahan | Tetap dilaporkan, tapi bukan metrik utama |
-| Evidence attribution | 🟡 | Pada QA utama masih lemah; pada source prediction sudah mulai bergerak jelas | Belum ada evaluasi manual formal yang cukup besar | Tambah review manual terstruktur |
-| Evidence support rate | ❌ | Rubrik dan kategori error sudah ada, tapi belum dihitung sebagai rate | Belum ada agregasi manual final | Buat tabel manual review dan hitung proporsinya |
-| Unsupported answer rate | ❌ | Kategori `unsupported-answer` dan `factually-wrong` sudah ada; heuristic flags sudah tersedia | Belum dihitung sebagai rate final | Coding manual pada subset evaluasi |
+| Evidence attribution | 🟡 | Pada QA utama masih lemah; pada source prediction sudah mulai bergerak jelas | Source-prediction masih perlu test set yang tidak menyebut sumber eksplisit | Buat varian source-prediction `explicit` dan `implicit` |
+| Evidence support rate | 🟡 | Rubrik dan seed manual review sudah berjalan; review semi-otomatis juga sudah ada | Belum ada review final yang balanced untuk `A/B/C` | Review manual minimal `30-50` contoh per kondisi |
+| Unsupported answer rate | 🟡 | Kategori `unsupported-answer` dan `factually-wrong` sudah dihitung pada seed review | Belum cukup besar untuk klaim final | Coding manual balanced pada subset evaluasi final |
 | Ketepatan rujukan pasal atau bagian dokumen | 🟡 | QA utama masih lemah pada citation metrics; source prediction branch sudah bermakna | Citation di QA utama belum stabil | Pertahankan source branch sebagai pembanding attribution |
-| Jumlah token konteks saat inferensi | ❌ | Secara konsep jelas `B` > `C`, tapi belum ada pengukuran formal | Belum ada tabel token count | Hitung prompt token A/B/C |
-| Latensi p50 / p95 | ❌ | Belum diukur formal | Belum ada benchmark inferensi | Buat benchmark inferensi A/B/C |
-| Penggunaan memori | ❌ | Belum diukur sistematis | Definisi metrik memori belum dikunci | Tetapkan metrik memori yang konsisten |
+| Jumlah token konteks saat inferensi | 🟡 | Benchmark awal sudah menunjukkan `C` mengurangi prompt token dibanding `B` | Token masih proxy berbasis `split()` | Hitung token dengan tokenizer model |
+| Latensi p50 / p95 | 🟡 | Benchmark awal sudah ada | p50/p95 masih proxy dari total latency, bukan per-sample latency nyata | Ubah benchmark menjadi per-example measurement |
+| Penggunaan memori | 🟡 | Peak RSS proxy sudah dicatat pada benchmark awal | Definisi dan prosedur ukur belum final | Tetapkan prosedur memory measurement yang konsisten |
 
 ## 3) Kesesuaian terhadap Tujuan Khusus Proposal
 
@@ -66,18 +66,305 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 
 | Aspek | Kenapa Belum |
 | --- | --- |
-| Evidence support rate | Belum dihitung sistematis |
-| Unsupported answer rate | Belum dihitung sistematis |
-| Latency p50/p95 | Belum diukur formal |
-| Penggunaan memori | Belum diukur formal |
+| Evidence support rate | Sudah ada seed, tetapi belum balanced dan belum cukup besar |
+| Unsupported answer rate | Sudah ada seed, tetapi belum balanced dan belum cukup besar |
+| Latency p50/p95 | Sudah ada benchmark awal, tetapi p50/p95 masih proxy |
+| Penggunaan memori | Sudah ada peak RSS proxy, tetapi prosedur belum dikunci |
 | Validasi final pada setup utama yang dikunci | Belum ada satu eksperimen final utama |
 
-## 5) Prioritas Lanjutan 🚀
+## 5) Risiko Metodologis yang Harus Diperbaiki
+
+| Risiko | Dampak terhadap Klaim | Perbaikan |
+| --- | --- | --- |
+| Pertanyaan source-prediction sering menyebut UU, tahun, atau pasal secara eksplisit | Metrik source prediction dapat terbaca sebagai ekstraksi dari prompt, bukan internalisasi attribution | Pisahkan source-prediction menjadi `explicit` dan `implicit`; jadikan `implicit` sebagai bukti utama |
+| Pertanyaan QA utama sebagian menyebut sumber hukum eksplisit | Citation score bisa kurang bermakna karena sumber sudah tersurat | Untuk evaluasi traceability, buat subset pertanyaan tanpa sumber eksplisit |
+| Seen split lebih kuat daripada unseen split | Klaim internalisasi bisa terbaca sebagai memorization pada dokumen training | Laporkan seen dan unseen secara terpisah; jangan menggabungkan sebagai satu skor utama |
+| Ukuran test set masih kecil | Ranking model dan selisih `A/B/C` belum stabil secara tesis | Perbesar test seen dan unseen sebelum eksperimen final |
+| Manual review belum balanced antar kondisi | Evidence support rate dan unsupported answer rate belum dapat dibandingkan adil | Review jumlah contoh yang sama untuk `A`, `B`, dan `C` |
+| Benchmark efisiensi masih proxy | Klaim efisiensi belum kuat | Ukur latency per contoh, token tokenizer, generated tokens/sec, dan peak memory dengan prosedur tetap |
+
+## 6) Rencana Eksperimen Final
+
+### Cabang 1: QA Internalization
+
+| Komponen | Keputusan Final |
+| --- | --- |
+| Objective | Menguji apakah adapter LoRA dapat meningkatkan kualitas jawaban tanpa dokumen sumber saat inferensi |
+| Model utama | `TinyLlama` |
+| Model pembanding | `Qwen3`, `Mistral q4` sebagai pendukung, bukan basis klaim utama |
+| Format data | JSON `answer + source` |
+| Kondisi | `A`: base no-context; `B`: base with-context; `C`: adapter no-context |
+| Split wajib | `test_seen` dan `test_unseen` dilaporkan terpisah |
+| Metrik utama | `Answer F1` |
+| Metrik pendukung | `Answer EM`, `Citation EM`, `Citation Component Score`, manual review, efisiensi inferensi |
+| Klaim aman yang ditargetkan | `C` dapat mengungguli `A` pada kualitas jawaban di seen-document setting, tetapi `B` tetap upper bound praktis |
+
+Dataset target minimal untuk eksperimen final:
+
+| Split | Target Minimal | Catatan |
+| --- | ---: | --- |
+| Train | `300-500` contoh | Tetap document-grounded untuk training adapter |
+| Valid | `50` contoh | Dipakai untuk monitoring, bukan klaim utama |
+| Test seen | `100` contoh | Pertanyaan dari regulasi yang ada di train, tetapi tidak literal duplicate |
+| Test unseen | `100` contoh | Regulasi held-out penuh |
+
+### Cabang 2: Source Attribution
+
+| Komponen | Keputusan Final |
+| --- | --- |
+| Objective | Menguji apakah rujukan sumber hukum dapat diprediksi ketika attribution dijadikan task eksplisit |
+| Model utama | `Mistral q4` untuk `source_component_score` |
+| Model pembanding | `Qwen3` untuk `source_exact_match`, `TinyLlama` sebagai baseline ringan |
+| Format data | JSON `source_type`, `source_number`, `source_year`, `source_article` |
+| Varian evaluasi | `source-explicit` dan `source-implicit` |
+| Bukti utama | `source-implicit`, karena prompt tidak boleh menyebut UU/tahun/pasal target secara langsung |
+| Metrik utama | `source_component_score` dan `source_exact_match` |
+| Metrik pendukung | valid JSON rate dan akurasi per komponen |
+
+Aturan dataset source attribution:
+
+| Aturan | Tujuan |
+| --- | --- |
+| `source-explicit` boleh menyebut UU/pasal | Sanity check parsing dan format |
+| `source-implicit` tidak boleh menyebut UU, nomor, tahun, atau pasal target | Menguji attribution yang lebih dekat ke internalisasi |
+| Test set harus split by law atau by article group | Mengurangi leakage antar train dan test |
+| Laporkan `explicit` dan `implicit` terpisah | Menghindari overclaim dari test yang terlalu mudah |
+
+Status implementasi awal:
+
+| Item | Status | Catatan |
+| --- | --- | --- |
+| Builder menghasilkan subset `explicit` dan `implicit` | ✅ | `scripts/build_pasalid_source_dataset.py` sekarang menulis `data/pasalid_source/explicit/` dan `data/pasalid_source/implicit/` |
+| Detector pertanyaan eksplisit | ✅ | Pertanyaan ditandai eksplisit jika menyebut UU/nomor/tahun/pasal target |
+| Augmentasi pertanyaan `implicit` | ✅ | Builder membuat pertanyaan implisit dari isi jawaban sehingga tidak bergantung pada pertanyaan asli yang sering menyebut sumber |
+| Ukuran subset `implicit` | 🟡 | Naik menjadi `238` row, dengan `24` row pada test law saat split sekarang |
+| Validasi leakage `implicit` | ✅ | Detector menemukan `0` target-source mention pada train/valid/test `implicit` |
+| Evaluasi awal `implicit` | ✅ | Mistral q4 menjadi yang terbaik pada `source_component_score` (`0.5312`), tetapi semua model `source_exact_match = 0` |
+| Split `seen/unseen` untuk source attribution | ✅ | `implicit` sekarang memiliki `test_seen` (`71` row) dan `test_unseen` (`24` row) |
+| Retraining Mistral q4 pada `implicit` | 🟡 | Belum memperbaiki component score total; adapter lama masih lebih tinggi pada seen dan unseen |
+| Kesiapan evaluasi final `implicit` | 🟡 | Sudah lebih layak untuk evaluasi awal; untuk tesis final tetap perlu test implicit lebih besar, lebih beragam, dan objective attribution yang lebih kuat |
+
+### Manual Review Final
+
+| Komponen | Target |
+| --- | --- |
+| Jumlah contoh | Minimal `30-50` contoh per kondisi `A/B/C` |
+| Sampling | Balanced dari test seen dan test unseen |
+| Dimensi | `factual_correctness`, `evidence_support`, `source_traceability` |
+| Rate final | `evidence_support_rate`, `unsupported_answer_rate`, `source_traceability_rate` |
+| Posisi LLM judge | Alat bantu coding awal; subset tetap diverifikasi manual |
+
+### Benchmark Efisiensi Final
+
+| Metrik | Perbaikan yang Dibutuhkan |
+| --- | --- |
+| Prompt token | Gunakan tokenizer model, bukan `text.split()` |
+| Latency avg/p50/p95 | Ukur per contoh dengan warm-up terpisah |
+| Generated tokens/sec | Catat jumlah token output dan waktu decoding |
+| Memory | Gunakan prosedur peak memory yang sama untuk `A`, `B`, dan `C` |
+| Interpretasi | Pisahkan pengurangan panjang konteks dari efisiensi runtime murni |
+
+## 7) Prioritas Eksekusi
 
 | Prioritas | Pekerjaan | Alasan |
 | --- | --- | --- |
-| 1 | Ukur metrik efisiensi (`token`, `latency p50/p95`, `memory`) | Ini gap utama proposal yang masih kosong |
-| 2 | Lakukan manual review terstruktur untuk `evidence support rate` dan `unsupported answer rate` | Ini akan mengisi aspek akuntabilitas yang belum final |
-| 3 | Kunci satu setup eksperimen final untuk QA utama | Agar klaim utama tesis punya basis yang stabil |
-| 4 | Kunci satu setup eksperimen final untuk source prediction | Agar branch attribution juga final dan setara |
-| 5 | Susun bab hasil dan pembahasan berdasarkan dua cabang eksperimen tersebut | Ini akan mengubah hasil pilot menjadi narasi tesis yang utuh |
+| 1 | Perbesar dan kunci split QA final | Agar klaim `A/B/C` punya basis stabil dan tidak hanya pilot |
+| 2 | Jalankan final QA `TinyLlama A/B/C` pada seen dan unseen | Ini bukti utama proposal tentang internalisasi adapter |
+| 3 | Perbesar source attribution `implicit` untuk final tesis | Test implicit saat ini sudah lebih baik, tetapi masih perlu coverage lebih besar untuk klaim final |
+| 4 | Uji objective attribution yang lebih kuat | Retraining implicit biasa belum memperbaiki component score total |
+| 5 | Perbaiki benchmark efisiensi menjadi per-example measurement | Mengisi dimensi efisiensi yang menjadi target proposal |
+| 6 | Lakukan manual review balanced untuk `A/B/C` | Mengisi evidence support dan unsupported answer rate final |
+| 7 | Susun pembahasan tesis dengan dua cabang eksperimen | Menghindari overclaim bahwa satu output generatif menyelesaikan QA dan citation sekaligus |
+
+Status terbaru QA final:
+
+| Item | Status | Catatan |
+| --- | --- | --- |
+| Konversi `qa_bank_full` ke JSON `answer + source` | ✅ | Menghasilkan `data/pasalid/qa_bank_json_final.jsonl` dengan `285` row dari `12` laws |
+| Split final QA lebih besar | ✅ | `data/pasalid/json_final_split/`: train `146`, valid `15`, test_seen `73`, test_unseen `51` |
+| Training TinyLlama final | ✅ | Adapter `1000` iter dan sanity-check `400` iter sudah dievaluasi |
+| Hasil `C > A` pada split final konversi | ❌ | `C` berada di bawah `A` pada seen dan unseen |
+| Status split final konversi | 🟡 | Berguna sebagai negative robustness check, tetapi belum layak menggantikan JSON-large pilot sebagai setup utama |
+| Next action QA | 🟡 | Perbesar dataset dengan native JSON QA tambahan dari `doc_units`, bukan konversi massal dari QA naratif |
+
+## 8) Batas Klaim Final yang Direkomendasikan
+
+| Jenis Klaim | Formulasi Aman |
+| --- | --- |
+| Internalization | Adapter LoRA menunjukkan internalisasi parsial karena kondisi `C` dapat melampaui `A` pada kualitas jawaban di setup tertentu |
+| Context baseline | Kondisi `B` tetap menjadi upper bound praktis karena konteks eksplisit masih memberi kualitas jawaban terbaik |
+| Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
+| Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
+| Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B`; klaim latency dan memory hanya boleh dibuat setelah benchmark final |
+
+Klaim yang sebaiknya dihindari:
+
+| Klaim | Alasan |
+| --- | --- |
+| Adapter sudah menggantikan kebutuhan konteks dokumen | `B` masih konsisten lebih kuat daripada `C` |
+| Model sudah memberi citation legal yang reliabel | Citation metrics QA utama masih sangat lemah |
+| Source-prediction membuktikan internalisasi penuh | Test eksplisit masih berisiko mengandung jawaban sumber di prompt |
+| Model lebih besar otomatis lebih baik | Qwen3 dan Mistral tidak mengungguli TinyLlama pada QA utama saat ini |
+
+## 9) Validasi Cepat Adaptasi Hypernetwork
+
+Bagian ini menjawab apakah arah Doc-to-LoRA-style hypernetwork dapat ditambahkan tanpa mengubah temuan eksperimen yang sudah ada.
+
+### Kesimpulan kelayakan
+
+| Aspek | Status | Catatan |
+| --- | --- | --- |
+| Kompatibel dengan pipeline LoRA existing | ✅ | Pipeline sudah bisa memuat adapter `.npz`; hypernetwork dapat menghasilkan `.npz` dengan key dan shape yang sama |
+| Perlu mengubah hasil A/B/C yang sudah ada | ❌ | Tidak perlu; hypernetwork diposisikan sebagai kondisi baru `H`, bukan pengganti `A/B/C` |
+| Ukuran output penuh TinyLlama LoRA | 🟡 | Adapter TinyLlama 4 layer q/v rank-8 berisi `204,800` parameter, masih kecil sebagai artifact, tetapi besar untuk MLP output naif |
+| Prototype paling aman | ✅ | Mulai dari generated `lora_b` atau mixture-of-LoRA basis, bukan generate semua matrix LoRA penuh |
+| Risiko utama | 🟡 | Dataset dokumen masih kecil untuk meta-training; perlu dimulai sebagai prototype feasibility, bukan klaim final utama |
+
+### Kenapa tidak mengubah temuan saat ini
+
+Temuan yang sudah ada tetap berlaku untuk **LoRA fine-tuning biasa**:
+
+| Temuan existing | Status setelah hypernetwork ditambahkan |
+| --- | --- |
+| `B` context-based masih upper bound praktis | Tetap berlaku sebagai baseline `B` |
+| `C` adapter-only tidak stabil | Tetap berlaku sebagai baseline LoRA konvensional |
+| Source attribution sulit tanpa sumber eksplisit | Tetap berlaku; hypernetwork menjadi metode baru untuk diuji |
+| Split konversi naratif noisy | Tetap diperlakukan sebagai negative robustness check |
+
+Hypernetwork tidak membatalkan hasil ini karena ia menjawab pertanyaan yang berbeda: apakah adapter dapat **dihasilkan dari dokumen**, bukan apakah LoRA biasa cukup setelah fine-tuning QA.
+
+### Kondisi eksperimen tambahan
+
+| Kondisi | Deskripsi | Peran |
+| --- | --- | --- |
+| `A` | Base no-context | Lower bound |
+| `B` | Base with-context | Context upper bound |
+| `C` | Fine-tuned LoRA no-context | Baseline internalisasi konvensional |
+| `D` | Fine-tuned LoRA with-context | Context-use adapter check |
+| `H` | Hypernetwork-generated LoRA no-context | Doc-to-LoRA-inspired prototype |
+
+Target validasi cepat bukan `H > B`, tetapi:
+
+| Pertanyaan | Interpretasi |
+| --- | --- |
+| Apakah `H > A`? | Ada sinyal document-conditioned adaptation |
+| Apakah `H` mendekati `C`? | Hypernetwork mulai meniru LoRA fine-tuning biasa |
+| Apakah `H` gagal total? | LoRA biasa tetap baseline; Doc-to-LoRA penuh butuh desain lebih kuat |
+
+### Prototype paling feasible
+
+Urutan prototype yang disarankan:
+
+| Tahap | Desain | Alasan |
+| --- | --- | --- |
+| 1 | Generate adapter `.npz` dummy dengan shape yang sama | Validasi integration path tanpa training hypernetwork |
+| 2 | Document embedding -> MLP -> `lora_b` saja | Output jauh lebih kecil daripada full LoRA; `lora_a` bisa fixed/global |
+| 3 | Document embedding -> koefisien mixture-of-LoRA basis | Paling ringan untuk meta-learning kecil |
+| 4 | Full LoRA generation | Ditunda; paling mahal dan paling berisiko overfit |
+
+Catatan dari repo SakanaAI `Doc-to-LoRA`:
+
+| Komponen Doc-to-LoRA | Relevansi untuk repo ini |
+| --- | --- |
+| `ModulatedPretrainedModel.internalize(doc)` | Konsep utama: dokumen diproses sekali untuk menghasilkan LoRA yang memengaruhi generation berikutnya |
+| `HyperLoRA` | Hypernetwork menghasilkan matrix LoRA per layer dan module dari fitur context encoder |
+| `target_modules: [down_proj]` pada config NIAH/main | Mereka membatasi target module agar output hypernetwork lebih feasible |
+| `ctx_encoder_type: per_layer_activations` dan Perceiver aggregator | Implementasi penuh cukup berat; untuk validasi cepat repo ini sebaiknya tidak langsung direplikasi penuh |
+| Runtime `lora_forward` patching | Ide yang bisa ditiru; namun untuk repo ini jalur `.npz` lebih sederhana dan tidak mengganggu pipeline existing |
+
+Untuk TinyLlama setup saat ini:
+
+| Target generation | Perkiraan parameter output per adapter |
+| --- | ---: |
+| Full q/v LoRA 4 layer rank-8 | `204,800` |
+| `lora_b` only q/v 4 layer rank-8 | `73,728` |
+| Mixture coefficients untuk 8 basis LoRA | `8` |
+
+### Validasi integrasi yang sudah dilakukan
+
+| Item | Status | Catatan |
+| --- | --- | --- |
+| Script generator adapter prototype | ✅ | `scripts/prototype_doc_to_lora_adapter.py` menghasilkan adapter `.npz` dari doc unit memakai schema adapter TinyLlama existing |
+| Adapter prototype zero | ✅ | `outputs/adapters/adapters_pasalid_hyperproto_tinyllama_zero.npz` berisi LoRA nol untuk validasi loading |
+| Adapter prototype hash | ✅ | `outputs/adapters/adapters_pasalid_hyperproto_tinyllama_hash.npz` berisi LoRA deterministik berbasis hash dokumen dengan skala kecil |
+| Manifest adapter | ✅ | Manifest `.json` mencatat hash dokumen, mode, jumlah tensor, dan jumlah parameter |
+| Export/evaluator compatibility | ✅ | Kedua adapter bisa dimuat oleh `scripts/export_pasalid_experiment_abc.py` tanpa perubahan model core |
+| Efek output prototype | ✅ | Adapter `zero` menghasilkan skor sama dengan base no-context pada smoke test, sesuai ekspektasi karena LoRA nol tidak mengubah model |
+| Mixture-of-LoRA prototype | ✅ | `scripts/prototype_doc_to_lora_mixture.py` menghasilkan adapter campuran dari beberapa basis LoRA existing |
+| Smoke test mixture | ✅ | Adapter mixture bisa dimuat dan dievaluasi; pada 5 contoh JSON-large seen, `H_mixture` F1 `0.2544` vs base `A` F1 `0.2406` |
+| Oracle grid-search mixture | ✅ | `scripts/grid_search_lora_mixture.py` mencari koefisien global dan per-law terbaik dari basis LoRA existing |
+
+Makna validasi:
+
+| Pertanyaan | Jawaban |
+| --- | --- |
+| Apakah repo ini bisa menerima adapter yang dihasilkan secara eksternal? | Ya, selama key dan shape `.npz` mengikuti adapter LoRA existing |
+| Apakah ini sudah hypernetwork terlatih? | Belum; ini baru integration prototype untuk jalur `document -> adapter artifact -> evaluation` |
+| Apakah temuan A/B/C berubah? | Tidak; prototype diposisikan sebagai kondisi `H` tambahan |
+| Langkah berikutnya | Ganti koefisien hash/deterministik dengan hypernetwork kecil yang belajar memilih koefisien mixture dari document embedding |
+
+### Hasil oracle mixture awal
+
+Basis yang dipakai:
+
+| Basis | Adapter |
+| --- | --- |
+| `b0` | `adapters_pasalid_tinyllama_experiment.npz` |
+| `b1` | `adapters_pasalid_tinyllama_final.npz` |
+| `b2` | `adapters_pasalid_tinyllama_final_400.npz` |
+
+Kandidat koefisien: single basis, pairwise average, dan uniform average.
+
+| Split | Best Single/Basis F1 | Best Global Mixture F1 | Per-Law Oracle F1 | Catatan |
+| --- | ---: | ---: | ---: | --- |
+| JSON-large seen (`48` rows) | 0.2996 (`b0`) | 0.3259 (`0.5*b0 + 0.5*b2`) | 0.3584 | Routing per-law memberi sinyal paling kuat |
+| JSON-large unseen (`21` rows) | 0.2731 (`b2`) | 0.2796 (`0.5*b1 + 0.5*b2`) | 0.2796 | Hanya satu held-out law, jadi oracle sama dengan global |
+
+Interpretasi:
+
+| Temuan | Makna |
+| --- | --- |
+| Mixture global bisa mengungguli basis tunggal | LoRA fusion bukan sekadar kosmetik; ada sinyal komplementaritas antar adapter |
+| Oracle per-law lebih tinggi pada seen split | Learned router berbasis dokumen/law layak diuji |
+| Citation tetap nol | Mixture saat ini membantu answer overlap, belum memperbaiki traceability |
+| Unseen improvement kecil | Generalisasi routing ke held-out law masih belum terbukti kuat |
+
+### Hasil learned router awal
+
+Router kecil dibuat di `scripts/train_lora_mixture_router.py`. Router ini memakai fitur law/doc sederhana:
+
+| Fitur | Contoh |
+| --- | --- |
+| metadata hukum | nomor UU, tahun, jumlah article unit |
+| panjang dokumen | rata-rata karakter doc unit |
+| indikator isi | ada/tidaknya kata pidana/denda, tetap berlaku/dicabut |
+| komposisi unit | rasio `article_qa` |
+
+Router dilatih dari oracle per-law pada JSON-large seen split, lalu diuji pada seen dan unseen.
+
+| Evaluasi | Router F1 | Best Global Mixture F1 | Oracle F1 | Catatan |
+| --- | ---: | ---: | ---: | --- |
+| Seen | 0.3430 | 0.3259 | 0.3584 | Router mendekati oracle dan mengungguli global mixture |
+| Unseen | 0.2576 | 0.2796 | 0.2796 | Router belum generalize ke held-out law |
+
+Interpretasi:
+
+| Temuan | Makna |
+| --- | --- |
+| Router seen > global mixture | Document/law-conditioned routing memang punya sinyal manfaat |
+| Router seen < oracle | Masih ada ruang untuk fitur/arsitektur router lebih baik |
+| Router unseen < global mixture | Fitur law-level sederhana belum cukup untuk generalisasi ke law baru |
+| Klaim aman | Prototype mendukung feasibility branch `H`, bukan klaim hypernetwork final |
+
+### Rekomendasi scope tesis
+
+Hypernetwork sebaiknya masuk sebagai **branch feasibility/prototype**, bukan mengganti eksperimen utama yang sudah ada.
+
+Formulasi aman:
+
+| Bagian tesis | Posisi |
+| --- | --- |
+| Eksperimen A/B/C/D | Baseline empiris LoRA konvensional |
+| Eksperimen H | Prototype Doc-to-LoRA-inspired document-conditioned adapter generation |
+| Klaim utama | LoRA konvensional punya batas; hypernetwork diuji sebagai arah adaptasi yang lebih dekat ke Doc-to-LoRA |
+| Klaim yang dihindari | Hypernetwork sudah mereplikasi Doc-to-LoRA penuh |

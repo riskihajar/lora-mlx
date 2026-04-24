@@ -32,7 +32,7 @@ def write_jsonl(path: Path, rows: list[dict], include_source_doc: bool) -> None:
             handle.write(json.dumps({"text": text}, ensure_ascii=True) + "\n")
 
 
-def split_rows(rows: list[dict], seed: int):
+def split_rows(rows: list[dict], seed: int, valid_law_count: int | None = None, test_law_count: int | None = None):
     by_law = defaultdict(list)
     for row in rows:
         by_law[row["law_id"]].append(row)
@@ -44,8 +44,12 @@ def split_rows(rows: list[dict], seed: int):
     if len(law_ids) < 4:
         raise ValueError("Need at least 4 laws to build train/valid/test_seen/test_unseen splits.")
 
-    valid_count = max(1, len(law_ids) // 10)
-    test_count = max(1, len(law_ids) // 10)
+    valid_count = valid_law_count if valid_law_count is not None else max(1, len(law_ids) // 10)
+    test_count = test_law_count if test_law_count is not None else max(1, len(law_ids) // 10)
+    if valid_count < 1 or test_count < 1:
+        raise ValueError("valid and test law counts must be at least 1")
+    if valid_count + test_count >= len(law_ids):
+        raise ValueError("valid and test law counts must leave at least one train law")
     train_laws = law_ids[: len(law_ids) - valid_count - test_count]
     valid_laws = law_ids[len(train_laws) : len(train_laws) + valid_count]
     test_unseen_laws = law_ids[len(train_laws) + valid_count :]
@@ -81,6 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=str(DEFAULT_SPLIT_DIR), help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--min-laws", type=int, default=4, help="Minimum distinct laws required to build full experiment splits")
+    parser.add_argument("--valid-law-count", type=int, default=None, help="Optional number of validation laws")
+    parser.add_argument("--test-law-count", type=int, default=None, help="Optional number of held-out test laws")
     return parser
 
 
@@ -92,7 +98,7 @@ def main() -> None:
         raise ValueError(
             f"Need at least {args.min_laws} laws to build experiment splits, but only found {law_count}."
         )
-    splits = split_rows(rows, args.seed)
+    splits = split_rows(rows, args.seed, valid_law_count=args.valid_law_count, test_law_count=args.test_law_count)
     output_dir = Path(args.output_dir)
 
     write_jsonl(output_dir / "train.jsonl", splits["train"], include_source_doc=True)

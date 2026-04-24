@@ -17,6 +17,26 @@ MODEL_PRESETS = {
         "model": "mlx_model",
         "adapter": "outputs/adapters/adapters_pasalid_tinyllama_experiment.npz",
     },
+    "tinyllama_final": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_tinyllama_final.npz",
+    },
+    "tinyllama_final_400": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_tinyllama_final_400.npz",
+    },
+    "tinyllama_hyperproto_zero": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_hyperproto_tinyllama_zero.npz",
+    },
+    "tinyllama_hyperproto_hash": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_hyperproto_tinyllama_hash.npz",
+    },
+    "tinyllama_hyperproto_mixture": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_hyperproto_tinyllama_mixture.npz",
+    },
     "mistral_q4": {
         "model": "mlx_model_mistral_q4",
         "adapter": "outputs/adapters/adapters_pasalid_mistral_q4_experiment.npz",

@@ -80,6 +80,41 @@ Interpretasi:
 - Adapter tidak lagi mengungguli baseline no-context pada subset unseen ini.
 - Ini menunjukkan bahwa sinyal internalisasi saat ini lebih kuat pada seen-document setting daripada generalisasi ke unseen-document setting.
 
+### Percobaan split final dari QA bank naratif
+
+Untuk memperbesar evaluasi, QA bank naratif `data/pasalid/qa_bank_full.jsonl` dikonversi ke format JSON `answer + source` dan dibagi menjadi split baru `data/pasalid/json_final_split/`.
+
+Ringkasan split:
+
+| Split | Rows |
+| --- | ---: |
+| train | 146 |
+| valid | 15 |
+| test_seen | 73 |
+| test_unseen | 51 |
+
+Adapter TinyLlama final dilatih dengan dua varian checkpoint: `1000` iterasi dan sanity-check `400` iterasi. Hasilnya:
+
+| Checkpoint | Split | A F1 | B F1 | C F1 | C Citation Component |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1000 iter | seen | 0.2700 | 0.4091 | 0.2371 | 0.0479 |
+| 1000 iter | unseen | 0.2752 | 0.4279 | 0.1743 | 0.0000 |
+| 400 iter | seen | 0.2700 | 0.4091 | 0.2163 | 0.0171 |
+| 400 iter | unseen | 0.2752 | 0.4279 | 0.1956 | 0.0000 |
+
+Interpretasi:
+
+- Split final hasil konversi naratif memperbesar evaluasi, tetapi tidak memperkuat klaim internalisasi.
+- Pada split ini, kondisi `C` berada di bawah `A` pada seen dan unseen.
+- Checkpoint `400` iterasi tidak memperbaiki pola, sehingga masalahnya bukan hanya overtraining di `1000` iterasi.
+- Beberapa sample training masih memicu warning panjang token, dan QA hasil konversi memiliki kualitas target yang lebih tidak stabil daripada QA JSON-native.
+- Karena itu, split ini lebih tepat diperlakukan sebagai **negative robustness check**, bukan sebagai pengganti setup utama JSON-large.
+
+Implikasi untuk eksperimen final:
+
+- Eksperimen utama tetap sebaiknya memakai QA yang sejak awal dihasilkan dalam format JSON `answer + source`, bukan konversi otomatis dari jawaban naratif.
+- Jika ingin memperbesar dataset final, langkah yang lebih tepat adalah menghasilkan native JSON QA tambahan dari `doc_units`, lalu melakukan review kualitas, bukan mengonversi QA lama secara massal.
+
 ## Perbandingan Antar Model
 
 ### Mistral q4
@@ -318,6 +353,62 @@ Interpretasi:
 - Pada eksperimen saat ini, QA utama lebih cocok untuk menilai internalisasi isi jawaban.
 - Task source prediction lebih cocok untuk menilai internalisasi attribution sumber.
 - Ranking model juga berbeda antar cabang eksperimen, sehingga model terbaik harus dipilih sesuai objective evaluasinya.
+
+### Stress test source-prediction implicit
+
+Untuk mengurangi risiko bahwa source-prediction hanya menyalin UU, tahun, atau pasal yang sudah muncul di prompt, dataset source attribution kemudian dipisahkan menjadi:
+
+- `explicit`: pertanyaan boleh menyebut sumber hukum target
+- `implicit`: pertanyaan tidak menyebut UU, tahun, atau pasal target secara eksplisit
+
+Builder dataset juga menambahkan pertanyaan `implicit` berbasis isi jawaban agar evaluasi tidak terlalu kecil. Hasil awal pada `data/pasalid_source/implicit/test.jsonl` (`24` contoh) adalah:
+
+| Model | valid_json_rate | source_exact_match | source_component_score | source_type_accuracy | source_number_accuracy | source_year_accuracy | source_article_accuracy |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TinyLlama | 0.8333 | 0.0000 | 0.3438 | 0.8333 | 0.0000 | 0.5417 | 0.0000 |
+| Mistral q4 | 1.0000 | 0.0000 | 0.5312 | 1.0000 | 0.0000 | 1.0000 | 0.1250 |
+| Qwen3 | 0.5417 | 0.0000 | 0.2604 | 0.5417 | 0.0000 | 0.5000 | 0.0000 |
+
+Interpretasi:
+
+- Evaluasi `implicit` jauh lebih sulit daripada source-prediction awal yang banyak mengandung sumber eksplisit di prompt.
+- Semua model gagal pada exact match ketika sumber target tidak muncul langsung di pertanyaan.
+- Mistral q4 masih menjadi yang terkuat pada `source_component_score`, terutama karena konsisten menghasilkan JSON valid, source type, dan tahun.
+- `source_number_accuracy` tetap `0`, sehingga kemampuan attribution belum cukup untuk klaim citation penuh.
+- Hasil ini memperkuat batas klaim: source-prediction eksplisit berguna sebagai sanity check format, tetapi bukti attribution yang lebih kuat harus memakai setup `implicit`.
+
+### Split source-prediction seen vs unseen
+
+Setelah stress test awal, dataset source attribution diperbaiki lagi agar memiliki `test_seen` dan `test_unseen`, bukan hanya satu `test` berbasis held-out law. Ini penting karena source attribution implicit pada held-out law penuh menuntut model menebak nomor UU yang tidak pernah muncul di training.
+
+Ringkasan split `data/pasalid_source/implicit/` setelah perbaikan:
+
+| Split | Rows |
+| --- | ---: |
+| train | 125 |
+| valid | 18 |
+| test_seen | 71 |
+| test_unseen | 24 |
+
+Detector leakage menemukan `0` target-source mention pada train, valid, `test_seen`, dan `test_unseen`.
+
+### Retraining Mistral q4 pada source-implicit
+
+Adapter baru dilatih pada `data/pasalid_source/implicit/` dengan output `outputs/adapters/adapters_pasalid_source_implicit_mistral_q4.npz`. Hasilnya dibandingkan dengan adapter source Mistral lama pada split implicit yang sama:
+
+| Adapter | Split | valid_json_rate | source_exact_match | source_component_score | source_number_accuracy | source_article_accuracy |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Mistral source lama | implicit seen | 1.0000 | 0.0000 | 0.5493 | 0.0845 | 0.1268 |
+| Mistral source-implicit baru | implicit seen | 0.8873 | 0.0141 | 0.5035 | 0.1408 | 0.1690 |
+| Mistral source lama | implicit unseen | 1.0000 | 0.0000 | 0.5312 | 0.0000 | 0.1250 |
+| Mistral source-implicit baru | implicit unseen | 0.9167 | 0.0000 | 0.5000 | 0.0000 | 0.1667 |
+
+Interpretasi:
+
+- Retraining khusus implicit belum memperbaiki `source_component_score` total.
+- Adapter baru sedikit menaikkan `source_number_accuracy` dan `source_article_accuracy` pada seen split, tetapi menurunkan valid JSON rate, type accuracy, dan year accuracy.
+- Pada unseen split, source number tetap `0`, sehingga generalisasi citation ke UU held-out belum tercapai.
+- Hasil ini sebaiknya diperlakukan sebagai hasil negatif yang berguna: memperbesar/memurnikan implicit data saja belum cukup; perlu desain training atau objective yang lebih kuat jika attribution penuh menjadi target final.
 
 ### Implikasi tesis
 
