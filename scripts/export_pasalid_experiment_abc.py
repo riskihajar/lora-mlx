@@ -76,7 +76,7 @@ def run_export(model: str, data_path: Path, output_path: Path, adapter_file: str
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Export A/B/C Pasal.id experiment predictions.")
+    parser = argparse.ArgumentParser(description="Export A/B/C Pasal.id experiment predictions, with optional D.")
     parser.add_argument("--preset", choices=sorted(MODEL_PRESETS), default="tinyllama", help="Model preset")
     parser.add_argument("--split", choices=["seen", "unseen"], default="seen", help="Which experiment split to export")
     parser.add_argument("--experiment-dir", default=str(DEFAULT_EXPERIMENT_DIR), help="Experiment split directory")
@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lora-layers", type=int, default=4, help="Number of LoRA layers")
     parser.add_argument("--max-new-tokens", type=int, default=64, help="Max generation tokens")
     parser.add_argument("--limit", type=int, default=None, help="Optional export limit")
+    parser.add_argument("--include-d", action="store_true", help="Also export condition D: adapter with source context")
     return parser
 
 
@@ -115,6 +116,11 @@ def main() -> None:
             "adapter": preset["adapter"],
         },
     }
+    if args.include_d:
+        exports["D_adapter_with_context"] = {
+            "data": with_context,
+            "adapter": preset["adapter"],
+        }
 
     results = {}
     for label, config in exports.items():

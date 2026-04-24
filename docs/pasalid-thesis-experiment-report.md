@@ -4,10 +4,11 @@
 
 - Tujuan eksperimen ini adalah mengevaluasi apakah internalisasi berbasis adapter dapat memindahkan pengetahuan dokumen hukum ke parameter model open-weight, sehingga model dapat menjawab pertanyaan tanpa menerima dokumen sumber saat inferensi.
 - Sumber data berasal dari API Pasal.id, tetapi yang digunakan dalam repo ini adalah artefak turunan lokal yang telah dibersihkan.
-- Tiga kondisi utama yang dibandingkan adalah:
+- Kondisi utama yang dibandingkan adalah:
   - `A`: model dasar tanpa konteks dokumen
   - `B`: model dasar dengan konteks dokumen sumber
   - `C`: model dasar dengan adapter LoRA tanpa konteks dokumen
+  - `D`: model dasar dengan adapter LoRA dan konteks dokumen sumber
 - Untuk kualitas jawaban, `F1` diperlakukan sebagai metrik utama.
 - `EM` tetap dilaporkan sebagai metrik ketat tambahan, tetapi tidak dijadikan dasar utama pembuktian karena jawaban legal QA dapat berbeda bentuk permukaan meskipun substansinya benar.
 
@@ -115,6 +116,49 @@ Implikasi untuk eksperimen final:
 - Eksperimen utama tetap sebaiknya memakai QA yang sejak awal dihasilkan dalam format JSON `answer + source`, bukan konversi otomatis dari jawaban naratif.
 - Jika ingin memperbesar dataset final, langkah yang lebih tepat adalah menghasilkan native JSON QA tambahan dari `doc_units`, lalu melakukan review kualitas, bukan mengonversi QA lama secara massal.
 
+### Kondisi D: adapter dengan konteks dokumen
+
+Untuk menguji apakah LoRA lebih berguna sebagai **context-use adapter** daripada pengganti konteks dokumen, ditambahkan kondisi:
+
+- `D`: model dasar + adapter LoRA + konteks dokumen sumber saat inferensi
+
+Pada setup TinyLlama JSON-large, hasilnya:
+
+| Split | A F1 | B F1 | C F1 | D F1 | D - B | D Citation Component |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen | 0.2555 | 0.4524 | 0.2770 | 0.4670 | +0.0145 | 0.0208 |
+| unseen | 0.2408 | 0.3500 | 0.2639 | 0.3643 | +0.0143 | 0.0476 |
+
+Interpretasi:
+
+- Kondisi `D` mengungguli `B` pada seen dan unseen split.
+- Gain F1 masih kecil, tetapi konsisten pada dua split.
+- Citation component juga mulai bergerak pada `D`, walaupun masih terlalu lemah untuk klaim traceability penuh.
+- Hasil ini mendukung framing tambahan bahwa LoRA dapat berfungsi sebagai adapter perilaku/domain yang membantu model memanfaatkan konteks dokumen, bukan hanya sebagai parametric memory tanpa konteks.
+
+Implikasi untuk tesis:
+
+- Klaim adapter-only internalization (`C`) tetap harus dibatasi.
+- Namun, klaim context-use adaptation (`D > B`) menjadi arah yang lebih feasible dan lebih dekat dengan sistem legal QA berbasis retrieval/context.
+
+Evaluasi lintas model memperlihatkan bahwa efek `D` bersifat **model-dependent**:
+
+| Model | Split | B F1 | D F1 | D - B | Citation Component D | Catatan |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| TinyLlama | seen | 0.4524 | 0.4670 | +0.0145 | 0.0208 | `D > B` |
+| TinyLlama | unseen | 0.3500 | 0.3643 | +0.0143 | 0.0476 | `D > B` |
+| Qwen3 | seen | 0.3565 | 0.3027 | -0.0538 | 0.0000 | `D < B` |
+| Qwen3 | unseen | 0.3902 | 0.3064 | -0.0838 | 0.0000 | `D < B` |
+| Mistral q4 long | seen | 0.3528 | 0.3992 | +0.0463 | 0.0000 | `D > B` |
+| Mistral q4 long | unseen | 0.3936 | 0.4497 | +0.0561 | 0.0000 | `D > B` |
+
+Makna lintas model:
+
+- TinyLlama dan Mistral q4 long mendukung hipotesis bahwa LoRA dapat bertindak sebagai context-use/domain adapter.
+- Qwen3 menjadi counterexample penting: adapter tidak otomatis memperbaiki penggunaan konteks dan bahkan dapat mengganggu baseline context.
+- Karena itu, klaim aman bukan “`D` selalu lebih baik daripada `B`”, melainkan “context-use adaptation punya sinyal positif pada sebagian model dan perlu divalidasi per arsitektur/checkpoint”.
+- Citation tetap menjadi bottleneck karena kenaikan `D` terutama terjadi pada overlap isi jawaban, bukan keterlacakan sumber yang stabil.
+
 ## Perbandingan Antar Model
 
 ### Mistral q4
@@ -180,15 +224,17 @@ Temuan utamanya:
 
 ## Temuan Utama
 
-- `B` secara konsisten merupakan kondisi terkuat di semua model yang diuji.
+- `B` secara konsisten lebih kuat daripada adapter-only `C` sebagai baseline konteks eksplisit.
 - `C` dalam beberapa setup mampu mengungguli `A`, yang mendukung klaim bahwa adapter dapat menginternalisasi sebagian informasi dokumen.
+- `D` memperlihatkan sinyal context-use adaptation pada TinyLlama dan Mistral q4 long, tetapi tidak pada Qwen3.
 - Kualitas jawaban dan kualitas keterlacakan sumber saat ini terpisah secara empiris: jawaban bisa membaik tanpa diikuti attribution yang baik.
 - Memperbesar model tidak otomatis memperbaiki masalah traceability.
 
 ## Temuan yang Stabil
 
-- Kondisi `B` tetap menjadi upper bound praktis terkuat di seluruh eksperimen yang sudah dijalankan.
+- Kondisi `B` tetap menjadi upper bound praktis untuk adapter-only inference (`C`) di seluruh eksperimen yang sudah dijalankan.
 - Kondisi `C` dalam beberapa setup memberi peningkatan atas `A`, sehingga ada dasar untuk menyatakan internalisasi parsial pada kualitas jawaban.
+- Kondisi `D` layak dilaporkan sebagai cabang tambahan karena menunjukkan bahwa LoRA bisa membantu penggunaan konteks pada sebagian model.
 - Format JSON `answer + source` adalah format eksperimen paling layak saat ini untuk menjaga kualitas jawaban sambil tetap memungkinkan evaluasi traceability.
 - `TinyLlama` tetap menjadi baseline paling kuat pada konfigurasi Pasal.id yang sudah diuji.
 
@@ -204,6 +250,7 @@ Makna dari pola ini adalah bahwa peningkatan performa saat ini lebih banyak terj
 
 - Aman untuk menyatakan bahwa adapter-based internalization dapat meningkatkan kualitas jawaban dibanding kondisi no-context pada beberapa setup.
 - Aman untuk menyatakan bahwa pendekatan context-based masih lebih kuat daripada adapter-only inference dalam eksperimen ini.
+- Aman untuk menyatakan bahwa adapter dengan konteks (`D`) memberi sinyal positif pada sebagian model, tetapi efeknya belum universal.
 - Belum aman untuk menyatakan bahwa model sudah mampu memberi source attribution yang reliabel dan machine-checkable tanpa intervensi tambahan.
 
 ## Bottleneck Utama Saat Ini

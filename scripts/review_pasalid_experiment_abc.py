@@ -18,7 +18,12 @@ DEFAULT_EXPORT_DIR = DEFAULT_PREDICTIONS_DIR / "pasalid_experiment"
 
 
 def load_rows(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    if not path.exists():
+        raise FileNotFoundError(f"Missing prediction file: {path}")
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    if not rows:
+        raise ValueError(f"Prediction file is empty: {path}")
+    return rows
 
 
 def summarize_metrics(rows: list[dict]) -> dict[str, float]:
@@ -39,6 +44,12 @@ def summarize_metrics(rows: list[dict]) -> dict[str, float]:
         "citation_em": sum(citation_ems) / len(citation_ems),
         "citation_component_score": sum(citation_scores) / len(citation_scores),
     }
+
+
+def validate_row_counts(rows: dict[str, list[dict]]) -> None:
+    counts = {label: len(label_rows) for label, label_rows in rows.items()}
+    if len(set(counts.values())) != 1:
+        raise ValueError(f"Prediction row counts do not match: {counts}")
 
 
 def per_row_metrics(row: dict) -> dict[str, float]:
@@ -81,7 +92,7 @@ def heuristic_flags(prediction: str, gold: str) -> list[str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Review Pasal.id A/B/C outputs side by side.")
+    parser = argparse.ArgumentParser(description="Review Pasal.id A/B/C/D outputs side by side.")
     parser.add_argument("--preset", required=True, help="Model preset prefix used in export filenames")
     parser.add_argument("--split", choices=["seen", "unseen"], default="seen", help="Which split to review")
     parser.add_argument("--export-dir", default=str(DEFAULT_EXPORT_DIR), help="Directory containing exported A/B/C prediction files")
@@ -100,8 +111,12 @@ def main() -> None:
         "B": export_dir / f"{args.preset}_{args.split}_B_base_with_context.jsonl",
         "C": export_dir / f"{args.preset}_{args.split}_C_adapter_no_context.jsonl",
     }
+    d_path = export_dir / f"{args.preset}_{args.split}_D_adapter_with_context.jsonl"
+    if d_path.exists():
+        paths["D"] = d_path
 
     rows = {label: load_rows(path) for label, path in paths.items()}
+    validate_row_counts(rows)
 
     summary = {label: summarize_metrics(label_rows) for label, label_rows in rows.items()}
 
@@ -124,16 +139,22 @@ def main() -> None:
         print_block("A - Base no context", row_a["prediction"])
         print_block("B - Base with context", row_b["prediction"])
         print_block("C - Adapter no context", row_c["prediction"])
+        if "D" in rows:
+            print_block("D - Adapter with context", rows["D"][idx]["prediction"])
         sample_metrics = {
             "A": per_row_metrics(row_a),
             "B": per_row_metrics(row_b),
             "C": per_row_metrics(row_c),
         }
+        if "D" in rows:
+            sample_metrics["D"] = per_row_metrics(rows["D"][idx])
         sample_flags = {
             "A": heuristic_flags(row_a["prediction"], row_a["gold"]),
             "B": heuristic_flags(row_b["prediction"], row_b["gold"]),
             "C": heuristic_flags(row_c["prediction"], row_c["gold"]),
         }
+        if "D" in rows:
+            sample_flags["D"] = heuristic_flags(rows["D"][idx]["prediction"], rows["D"][idx]["gold"])
         print("Per-sample metrics:")
         print(json.dumps(sample_metrics, ensure_ascii=True, indent=2))
         print("Heuristic flags:")

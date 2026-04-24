@@ -38,7 +38,7 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | --- | --- | --- | --- | --- |
 | Merancang artefak internalisasi dokumen ke adapter LoRA | ✅ | Pipeline artefak sudah ada: ingestion, doc units, QA generation, split A/B/C, training, evaluation, reporting | - | Pertahankan dan dokumentasikan |
 | Menetapkan rancangan dataset eksperimen yang terukur dan dapat direplikasi | 🟡 | Dataset pipeline sudah reproducible; split dan format sudah ada; beberapa format output sudah diuji | Skala dataset belum final; coverage regulasi belum penuh | Perluas corpus dan kunci setup final |
-| Membandingkan performa A/B/C pada metrik utama dan pendukung | 🟡 | A/B/C sudah dibandingkan di beberapa model dan format; kualitas jawaban sudah cukup terisi | Akuntabilitas dan efisiensi belum terukur penuh | Lengkapi evaluasi manual dan benchmark efisiensi |
+| Membandingkan performa A/B/C/D pada metrik utama dan pendukung | 🟡 | A/B/C sudah dibandingkan di beberapa model dan format; D sudah diuji lintas TinyLlama, Qwen3, dan Mistral q4 long | Akuntabilitas dan efisiensi belum terukur penuh; efek D model-dependent | Lengkapi evaluasi manual dan benchmark efisiensi |
 | Menganalisis sejauh mana C mendekati B dan melampaui A | 🟡 | Pola `B > C > A` muncul di beberapa setup yang stabil | Belum ada satu eksperimen final sebagai basis klaim utama | Kunci satu protokol final |
 | Merumuskan rekomendasi desain sistem yang seimbang antara kualitas, traceability, dan efisiensi | 🟡 | Sudah ada rekomendasi awal: QA utama dan source attribution dipisah; JSON `answer + source` paling layak; source prediction jadi branch attribution | Aspek efisiensi belum cukup terukur | Tambah metrik efisiensi dan finalisasi rekomendasi |
 
@@ -93,11 +93,11 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | Model utama | `TinyLlama` |
 | Model pembanding | `Qwen3`, `Mistral q4` sebagai pendukung, bukan basis klaim utama |
 | Format data | JSON `answer + source` |
-| Kondisi | `A`: base no-context; `B`: base with-context; `C`: adapter no-context |
+| Kondisi | `A`: base no-context; `B`: base with-context; `C`: adapter no-context; `D`: adapter with-context sebagai cabang tambahan |
 | Split wajib | `test_seen` dan `test_unseen` dilaporkan terpisah |
 | Metrik utama | `Answer F1` |
 | Metrik pendukung | `Answer EM`, `Citation EM`, `Citation Component Score`, manual review, efisiensi inferensi |
-| Klaim aman yang ditargetkan | `C` dapat mengungguli `A` pada kualitas jawaban di seen-document setting, tetapi `B` tetap upper bound praktis |
+| Klaim aman yang ditargetkan | `C` dapat mengungguli `A` pada kualitas jawaban di sebagian setup, `B` tetap upper bound untuk adapter-only inference, dan `D` dapat membantu penggunaan konteks pada sebagian model |
 
 Dataset target minimal untuk eksperimen final:
 
@@ -192,7 +192,8 @@ Status terbaru QA final:
 | Jenis Klaim | Formulasi Aman |
 | --- | --- |
 | Internalization | Adapter LoRA menunjukkan internalisasi parsial karena kondisi `C` dapat melampaui `A` pada kualitas jawaban di setup tertentu |
-| Context baseline | Kondisi `B` tetap menjadi upper bound praktis karena konteks eksplisit masih memberi kualitas jawaban terbaik |
+| Context baseline | Kondisi `B` tetap menjadi upper bound praktis terhadap adapter-only `C`; kondisi `D` diuji terpisah sebagai adapter dengan konteks |
+| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
 | Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
 | Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B`; klaim latency dan memory hanya boleh dibuat setelah benchmark final |
@@ -201,7 +202,8 @@ Klaim yang sebaiknya dihindari:
 
 | Klaim | Alasan |
 | --- | --- |
-| Adapter sudah menggantikan kebutuhan konteks dokumen | `B` masih konsisten lebih kuat daripada `C` |
+| Adapter sudah menggantikan kebutuhan konteks dokumen | `B` masih konsisten lebih kuat daripada adapter-only `C` |
+| Adapter dengan konteks selalu lebih baik daripada base dengan konteks | Qwen3 menunjukkan `D < B` pada seen dan unseen |
 | Model sudah memberi citation legal yang reliabel | Citation metrics QA utama masih sangat lemah |
 | Source-prediction membuktikan internalisasi penuh | Test eksplisit masih berisiko mengandung jawaban sumber di prompt |
 | Model lebih besar otomatis lebih baik | Qwen3 dan Mistral tidak mengungguli TinyLlama pada QA utama saat ini |
@@ -232,6 +234,29 @@ Temuan yang sudah ada tetap berlaku untuk **LoRA fine-tuning biasa**:
 | Split konversi naratif noisy | Tetap diperlakukan sebagai negative robustness check |
 
 Hypernetwork tidak membatalkan hasil ini karena ia menjawab pertanyaan yang berbeda: apakah adapter dapat **dihasilkan dari dokumen**, bukan apakah LoRA biasa cukup setelah fine-tuning QA.
+
+### Kondisi D: LoRA + konteks dokumen
+
+Kondisi `D` ditambahkan untuk menguji apakah LoRA membantu model memanfaatkan konteks dokumen, bukan menggantikan konteks.
+
+| Model | Split | B F1 | D F1 | Selisih | Catatan |
+| --- | --- | ---: | ---: | ---: | --- |
+| TinyLlama | JSON-large seen | 0.4524 | 0.4670 | +0.0145 | `D > B` |
+| TinyLlama | JSON-large unseen | 0.3500 | 0.3643 | +0.0143 | `D > B` |
+| Qwen3 | JSON-large seen | 0.3565 | 0.3027 | -0.0538 | `D < B` |
+| Qwen3 | JSON-large unseen | 0.3902 | 0.3064 | -0.0838 | `D < B` |
+| Mistral q4 long | JSON-large seen | 0.3528 | 0.3992 | +0.0463 | `D > B` |
+| Mistral q4 long | JSON-large unseen | 0.3936 | 0.4497 | +0.0561 | `D > B` |
+
+Interpretasi:
+
+| Temuan | Makna |
+| --- | --- |
+| `D > B` pada TinyLlama dan Mistral q4 long | LoRA feasible diposisikan sebagai context-use/domain adapter pada sebagian model |
+| `D < B` pada Qwen3 | Adapter dapat mengganggu penggunaan konteks; efek D tidak universal |
+| Gain positif masih kecil hingga sedang | Perlu validasi pada dataset native JSON yang lebih besar |
+| Citation component masih lemah | Ada sinyal format/source adherence pada TinyLlama, tetapi belum cukup untuk traceability penuh |
+| Posisi tesis | `C` tetap branch internalization; `D` menjadi branch context-use adaptation yang lebih kuat secara praktis |
 
 ### Kondisi eksperimen tambahan
 
