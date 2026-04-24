@@ -29,7 +29,7 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | Unsupported answer rate | 🟡 | Kategori `unsupported-answer` dan `factually-wrong` sudah dihitung pada seed review | Belum cukup besar untuk klaim final | Coding manual balanced pada subset evaluasi final |
 | Ketepatan rujukan pasal atau bagian dokumen | 🟡 | QA utama masih lemah pada citation metrics; source prediction branch sudah bermakna | Citation di QA utama belum stabil | Pertahankan source branch sebagai pembanding attribution |
 | Jumlah token konteks saat inferensi | 🟡 | Benchmark awal sudah menunjukkan `C` mengurangi prompt token dibanding `B` | Token masih proxy berbasis `split()` | Hitung token dengan tokenizer model |
-| Latensi p50 / p95 | 🟡 | Benchmark awal sudah ada | p50/p95 masih proxy dari total latency, bukan per-sample latency nyata | Ubah benchmark menjadi per-example measurement |
+| Latensi p50 / p95 | ✅ | Benchmark clean sudah mendukung mode per-example | Perlu diperbesar dari subset `10` contoh jika akan jadi angka final tesis | Jalankan benchmark final pada subset lebih besar |
 | Penggunaan memori | 🟡 | Peak RSS proxy sudah dicatat pada benchmark awal | Definisi dan prosedur ukur belum final | Tetapkan prosedur memory measurement yang konsisten |
 
 ## 3) Kesesuaian terhadap Tujuan Khusus Proposal
@@ -196,8 +196,8 @@ Status terbaru QA final:
 | Training/evaluasi clean TinyLlama | ✅ | Seen: `C-A -0.0001`, `D-B +0.2393`; unseen: `C-A -0.0510`, `D-B +0.1025` |
 | Kesimpulan clean TinyLlama | ✅ | Clean split memperkuat `D` sebagai context-use adapter; `C` tidak stabil dan tidak layak jadi klaim utama final |
 | Review clean `B` vs `D` | ✅ | LLM-assisted review `20` contoh/split mendukung `D` pada factual/evidence/source baik seen maupun unseen |
-| Benchmark efisiensi clean awal | 🟡 | `C` mengurangi prompt token, tetapi belum lebih cepat; `D` kualitas tinggi dengan prompt sepanjang `B` |
-| Next action QA | 🟡 | Perbaiki benchmark menjadi per-example tokenizer-based dan lakukan manual review final lebih besar |
+| Benchmark efisiensi clean per-example | ✅ | Token dihitung dengan tokenizer; `C` mengurangi prompt token tetapi belum lebih cepat; `D` kualitas tinggi dengan latency lebih mahal dari `B` |
+| Next action QA | 🟡 | Perbesar benchmark per-example dan lakukan manual review final lebih besar |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 

@@ -228,24 +228,27 @@ Makna review clean:
 - Selisih factual/evidence masih moderat dan banyak tie, sehingga review manual lebih besar tetap dibutuhkan.
 - Peningkatan source traceability pada unseen lebih jelas, sejalan dengan citation component otomatis `D` yang naik ke `0.3494`.
 
-Benchmark efisiensi awal clean `A/B/C/D` dijalankan pada `10` contoh per split memakai `scripts/benchmark_pasalid_experiment.py`. Metrik token masih proxy berbasis `split()`, dan latency p50/p95 masih proxy karena script mengekspor batch kecil per kondisi, bukan mengukur setiap contoh secara terpisah.
+Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
 
-| Split | Kondisi | Avg prompt token proxy | Latency avg seconds | Peak RSS proxy |
-| --- | --- | ---: | ---: | ---: |
-| seen | A | 40.1 | 6.1568 | 2657992704 |
-| seen | B | 83.6 | 7.1348 | 2665447424 |
-| seen | C | 40.1 | 13.7218 | 1404960768 |
-| seen | D | 83.6 | 8.0383 | 2399502336 |
-| unseen | A | 63.4 | 6.1572 | 2652897280 |
-| unseen | B | 139.8 | 7.1134 | 2667282432 |
-| unseen | C | 63.4 | 13.9784 | 1393836032 |
-| unseen | D | 139.8 | 14.1087 | 1429749760 |
+Hasil pada `10` contoh per split:
 
-Makna benchmark awal:
+| Split | Kondisi | Avg prompt tokens | Latency avg | Latency p50 | Latency p95 | Generated tok/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seen | A | 53.6 | 5.8790 | 5.7993 | 6.1721 | 21.9764 |
+| seen | B | 193.4 | 6.5312 | 6.4886 | 6.8189 | 18.2049 |
+| seen | C | 53.6 | 10.2307 | 11.7526 | 11.9534 | 10.8107 |
+| seen | D | 193.4 | 9.4996 | 10.1627 | 12.2890 | 9.4215 |
+| unseen | A | 60.1 | 5.8786 | 5.8039 | 6.1506 | 22.1140 |
+| unseen | B | 291.5 | 6.5866 | 6.6209 | 7.0114 | 19.5548 |
+| unseen | C | 60.1 | 11.0282 | 11.8227 | 11.9290 | 9.5845 |
+| unseen | D | 291.5 | 9.8902 | 12.2894 | 12.7186 | 9.7066 |
 
-- `C` memang mengurangi prompt token dibanding `B/D`, tetapi pada benchmark ini tidak memberi keuntungan latency.
-- `D` membawa kualitas paling tinggi, tetapi memakai prompt sepanjang `B` dan pada unseen latency-nya mendekati `C`.
-- Angka memory/latency masih perlu benchmark per-example yang lebih rapi sebelum dijadikan klaim efisiensi final.
+Makna benchmark per-example:
+
+- `C` memang mengurangi prompt token drastis dibanding `B/D`, tetapi latency tetap lebih buruk daripada `A/B` karena adapter inference lebih mahal.
+- `D` membawa kualitas paling tinggi, tetapi memakai prompt sepanjang `B` dan latency lebih tinggi daripada `B`.
+- `B` masih menjadi baseline efisiensi-kualitas yang kuat: prompt lebih panjang dari `A/C`, tetapi latency tetap rendah karena tidak memuat adapter.
+- Peak RSS masih proxy proses dan belum isolasi sempurna per kondisi; klaim memory final tetap perlu prosedur terpisah jika ingin dilaporkan kuat.
 
 ### Kondisi D: adapter dengan konteks dokumen
 
