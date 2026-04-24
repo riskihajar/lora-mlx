@@ -542,6 +542,27 @@ Interpretasi:
 - `source_missing_rate` yang sangat tinggi pada ketiga kondisi menegaskan bahwa masalah utama tetap berada pada disiplin attribution sumber.
 - Dengan demikian, hasil review semi-otomatis tidak membatalkan metrik otomatis, tetapi justru memperkuat interpretasi bahwa branch QA utama belum cukup untuk menghasilkan jawaban yang benar sekaligus akuntabel.
 
+### Review semi-otomatis B vs D (`10` contoh per model/split)
+
+Untuk memeriksa apakah kenaikan otomatis pada kondisi `D` hanya artefak overlap teks atau juga tampak pada penilaian kualitatif, dilakukan review berbantu LLM pada pasangan `B` dan `D` untuk subset awal `10` contoh per model/split.
+
+| Model | Split | Δ factual D-B | Δ evidence D-B | Δ source D-B | Factual win B/D/tie | Evidence win B/D/tie | Source win B/D/tie |
+| --- | --- | ---: | ---: | ---: | --- | --- | --- |
+| TinyLlama | seen | +0.20 | +0.20 | +0.50 | 2/3/5 | 2/3/5 | 1/4/5 |
+| TinyLlama | unseen | -0.10 | -0.10 | +0.30 | 3/3/4 | 3/3/4 | 1/3/6 |
+| Qwen3 | seen | -0.40 | -0.30 | +0.40 | 3/0/7 | 3/1/6 | 0/3/7 |
+| Qwen3 | unseen | +0.10 | +0.10 | +0.10 | 3/4/3 | 3/4/3 | 2/3/5 |
+| Mistral q4 long | seen | +0.40 | +0.30 | +0.20 | 1/4/5 | 2/4/4 | 4/3/3 |
+| Mistral q4 long | unseen | +0.10 | +0.10 | +0.20 | 2/3/5 | 2/3/5 | 3/4/3 |
+
+Interpretasi:
+
+- Review awal mendukung sinyal `D` pada TinyLlama seen dan Mistral q4 long, terutama pada factual/evidence score.
+- TinyLlama unseen lebih campuran: automatic F1 `D > B`, tetapi factual/evidence review tipis memihak `B` atau tie; ini perlu review lebih besar.
+- Qwen3 tetap menjadi counterexample: seen split menunjukkan `D` lebih buruk secara factual/evidence, konsisten dengan automatic F1 `D < B`.
+- Source traceability sering membaik pada `D`, tetapi skor absolut masih rendah dan tidak cukup untuk klaim citation reliability.
+- Karena subset hanya `10` contoh per model/split dan berbantu LLM, hasil ini adalah **triangulasi awal**, bukan pengganti review manual final.
+
 ## Sintesis Akhir Antar Cabang
 
 ### Ringkasan cabang QA utama

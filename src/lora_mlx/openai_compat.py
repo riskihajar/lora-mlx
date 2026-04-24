@@ -46,6 +46,7 @@ def validate_client() -> dict[str, object]:
     model_ids = [item.id for item in models.data]
     response = client.responses.create(
         model=model,
+        store=False,
         input=[
             {
                 "role": "user",

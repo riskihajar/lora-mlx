@@ -25,7 +25,7 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | F1 sebagai nilai utama pembuktian | ✅ | F1 paling informatif di seluruh eksperimen QA utama | Sudah layak jadi metrik utama tesis | Pertahankan sebagai metrik utama |
 | EM sebagai pendukung kualitas jawaban | ✅ | EM sudah dihitung konsisten, tetapi hampir selalu `0` | Tetap berguna sebagai metrik ketat tambahan | Tetap dilaporkan, tapi bukan metrik utama |
 | Evidence attribution | 🟡 | Pada QA utama masih lemah; pada source prediction sudah mulai bergerak jelas | Source-prediction masih perlu test set yang tidak menyebut sumber eksplisit | Buat varian source-prediction `explicit` dan `implicit` |
-| Evidence support rate | 🟡 | Rubrik dan seed manual review sudah berjalan; review semi-otomatis juga sudah ada | Belum ada review final yang balanced untuk `A/B/C` | Review manual minimal `30-50` contoh per kondisi |
+| Evidence support rate | 🟡 | Rubrik dan seed manual review sudah berjalan; review semi-otomatis `A/B/C` dan pairwise `B/D` sudah ada | Belum ada review final yang balanced untuk `A/B/C/D` | Review manual minimal `30-50` contoh per kondisi |
 | Unsupported answer rate | 🟡 | Kategori `unsupported-answer` dan `factually-wrong` sudah dihitung pada seed review | Belum cukup besar untuk klaim final | Coding manual balanced pada subset evaluasi final |
 | Ketepatan rujukan pasal atau bagian dokumen | 🟡 | QA utama masih lemah pada citation metrics; source prediction branch sudah bermakna | Citation di QA utama belum stabil | Pertahankan source branch sebagai pembanding attribution |
 | Jumlah token konteks saat inferensi | 🟡 | Benchmark awal sudah menunjukkan `C` mengurangi prompt token dibanding `B` | Token masih proxy berbasis `split()` | Hitung token dengan tokenizer model |
@@ -80,7 +80,7 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | Pertanyaan QA utama sebagian menyebut sumber hukum eksplisit | Citation score bisa kurang bermakna karena sumber sudah tersurat | Untuk evaluasi traceability, buat subset pertanyaan tanpa sumber eksplisit |
 | Seen split lebih kuat daripada unseen split | Klaim internalisasi bisa terbaca sebagai memorization pada dokumen training | Laporkan seen dan unseen secara terpisah; jangan menggabungkan sebagai satu skor utama |
 | Ukuran test set masih kecil | Ranking model dan selisih `A/B/C` belum stabil secara tesis | Perbesar test seen dan unseen sebelum eksperimen final |
-| Manual review belum balanced antar kondisi | Evidence support rate dan unsupported answer rate belum dapat dibandingkan adil | Review jumlah contoh yang sama untuk `A`, `B`, dan `C` |
+| Manual review belum balanced antar kondisi | Evidence support rate dan unsupported answer rate belum dapat dibandingkan adil | Review jumlah contoh yang sama untuk `A`, `B`, `C`, dan `D` |
 | Benchmark efisiensi masih proxy | Klaim efisiensi belum kuat | Ukur latency per contoh, token tokenizer, generated tokens/sec, dan peak memory dengan prosedur tetap |
 
 ## 6) Rencana Eksperimen Final
@@ -148,7 +148,7 @@ Status implementasi awal:
 
 | Komponen | Target |
 | --- | --- |
-| Jumlah contoh | Minimal `30-50` contoh per kondisi `A/B/C` |
+| Jumlah contoh | Minimal `30-50` contoh per kondisi `A/B/C/D` |
 | Sampling | Balanced dari test seen dan test unseen |
 | Dimensi | `factual_correctness`, `evidence_support`, `source_traceability` |
 | Rate final | `evidence_support_rate`, `unsupported_answer_rate`, `source_traceability_rate` |
@@ -173,7 +173,7 @@ Status implementasi awal:
 | 3 | Perbesar source attribution `implicit` untuk final tesis | Test implicit saat ini sudah lebih baik, tetapi masih perlu coverage lebih besar untuk klaim final |
 | 4 | Uji objective attribution yang lebih kuat | Retraining implicit biasa belum memperbaiki component score total |
 | 5 | Perbaiki benchmark efisiensi menjadi per-example measurement | Mengisi dimensi efisiensi yang menjadi target proposal |
-| 6 | Lakukan manual review balanced untuk `A/B/C` | Mengisi evidence support dan unsupported answer rate final |
+| 6 | Lakukan manual review balanced untuk `A/B/C/D` | Mengisi evidence support dan unsupported answer rate final |
 | 7 | Susun pembahasan tesis dengan dua cabang eksperimen | Menghindari overclaim bahwa satu output generatif menyelesaikan QA dan citation sekaligus |
 
 Status terbaru QA final:
@@ -257,6 +257,19 @@ Interpretasi:
 | Gain positif masih kecil hingga sedang | Perlu validasi pada dataset native JSON yang lebih besar |
 | Citation component masih lemah | Ada sinyal format/source adherence pada TinyLlama, tetapi belum cukup untuk traceability penuh |
 | Posisi tesis | `C` tetap branch internalization; `D` menjadi branch context-use adaptation yang lebih kuat secara praktis |
+
+Review berbantu LLM awal pada `10` contoh per model/split memberi triangulasi tambahan:
+
+| Model | Split | Δ factual D-B | Δ evidence D-B | Δ source D-B | Catatan |
+| --- | --- | ---: | ---: | ---: | --- |
+| TinyLlama | seen | +0.20 | +0.20 | +0.50 | Mendukung `D` |
+| TinyLlama | unseen | -0.10 | -0.10 | +0.30 | Campuran; perlu sample lebih besar |
+| Qwen3 | seen | -0.40 | -0.30 | +0.40 | Counterexample kuat untuk `D` |
+| Qwen3 | unseen | +0.10 | +0.10 | +0.10 | Tipis mendukung `D`, tetapi automatic F1 tetap `D < B` |
+| Mistral q4 long | seen | +0.40 | +0.30 | +0.20 | Mendukung `D` |
+| Mistral q4 long | unseen | +0.10 | +0.10 | +0.20 | Tipis mendukung `D` |
+
+Kesimpulan review awal: `D` layak dipertahankan sebagai cabang context-use adaptation, tetapi klaimnya harus tetap dibatasi dan divalidasi dengan review manual final yang lebih besar.
 
 ### Kondisi eksperimen tambahan
 
