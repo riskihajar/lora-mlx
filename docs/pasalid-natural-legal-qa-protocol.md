@@ -205,6 +205,22 @@ Ringkasan residual failure `D`:
 
 Interpretasi audit: targeted completeness memperbaiki skor agregat, tetapi sisa bottleneck masih berada pada validasi isi jawaban untuk angka, provinsi asal, Lembaran Negara, daftar wilayah, dan status repeal.
 
+Evaluator factual slot ditambahkan untuk mengukur correctness fakta yang dapat diekstraksi tanpa LLM judge:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/eval_pasalid_natural_slots.py --predictions outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_D_adapter_with_context.jsonl --output outputs/reviews/pasalid_natural_legal/seen_D_slot_eval.json
+source ~/.zshrc && PYTHONPATH=src python3 scripts/eval_pasalid_natural_slots.py --predictions outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_D_adapter_with_context.jsonl --output outputs/reviews/pasalid_natural_legal/unseen_D_slot_eval.json
+```
+
+Ringkasan factual slot raw:
+
+| Split | B Correct / Total | B Acc. | D Correct / Total | D Acc. |
+| --- | ---: | ---: | ---: | ---: |
+| seen | 20/43 | 0.4651 | 25/43 | 0.5814 |
+| unseen | 4/17 | 0.2353 | 3/17 | 0.1765 |
+
+Interpretasi slot: `D` memperbaiki factual slots pada seen, terutama transition validity, tetapi tidak generalize pada unseen Tanah Datar. Constraint JSON/source tidak mengubah slot accuracy, sehingga perbaikan berikutnya harus menargetkan isi jawaban.
+
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 
 Eksperimen natural legal QA layak menjadi hasil utama jika:

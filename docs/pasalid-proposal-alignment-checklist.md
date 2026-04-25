@@ -199,9 +199,10 @@ Status terbaru QA final:
 | Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0634`; unseen: `D-B +0.0530`; `D` lebih baik pada answer F1, citation, dan copy-rate |
 | Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `17/30` seen dan `16/30` unseen |
 | Failure audit natural `D` | ✅ | Reproducible audit: strict failure seen `18/30`, unseen `16/30`; residual dominan entity/count/list, incomplete focus, extractive output, dan source/format raw |
+| Factual slot evaluation natural QA | ✅ | Slot checker deterministik: seen `D 25/43` vs `B 20/43`, unseen `D 3/17` vs `B 4/17`; constraint JSON/source tidak mengubah slot accuracy |
 | Benchmark efisiensi natural QA per-example | ✅ | `20` contoh/split; `D` menambah latency atas `B`, sedangkan `C` prompt pendek tetapi paling lambat |
 | Format/source constrained natural QA | ✅ | Post-processing constrained membuat valid JSON/citation `1.0`; pairwise constrained menjadi seen `B 12`, `D 11`, tie `7` dan unseen `B 11`, `D 13`, tie `6` |
-| Next action QA | 🟡 | Tambah checker/validator isi jawaban untuk angka, provinsi asal, Lembaran Negara, daftar wilayah, dan status repeal; jangan hanya memaksa JSON/source |
+| Next action QA | 🟡 | Gunakan slot failures untuk targeted data/decoding berikutnya: old formation province, Lembaran Negara, repeal status, dan held-out kecamatan Tanah Datar |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 

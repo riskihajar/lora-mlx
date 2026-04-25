@@ -421,6 +421,43 @@ Makna audit failure cases:
 - Error transition/repeal lebih terkendali dibanding audit sebelumnya, terutama pada unseen split.
 - Next action teknis paling relevan adalah validasi isi jawaban berbasis extraction/checker untuk angka, provinsi, dan status repeal, bukan hanya menambah post-processing JSON/source.
 
+Untuk memisahkan answer F1 dari correctness fakta spesifik, ditambahkan `scripts/eval_pasalid_natural_slots.py`. Evaluator ini membaca `prompt`, `gold`, dan `prediction`, lalu membuat slot check untuk kasus yang dapat diekstraksi secara deterministik: jumlah kecamatan, daftar kecamatan, provinsi saat pembentukan awal, provinsi saat ini, Lembaran Negara, status repeal, dan keberlakuan aturan peralihan.
+
+Hasil factual slot evaluation raw `B` vs `D`:
+
+| Split | Kondisi | Slot Checks | Correct | Slot Accuracy |
+| --- | --- | ---: | ---: | ---: |
+| seen | B raw | 43 | 20 | 0.4651 |
+| seen | D raw | 43 | 25 | 0.5814 |
+| unseen | B raw | 17 | 4 | 0.2353 |
+| unseen | D raw | 17 | 3 | 0.1765 |
+
+Breakdown slot `D` raw:
+
+| Split | Slot | Correct / Total | Accuracy |
+| --- | --- | ---: | ---: |
+| seen | current province | 2/2 | 1.0000 |
+| seen | gazette reference | 2/6 | 0.3333 |
+| seen | kecamatan count | 11/12 | 0.9167 |
+| seen | kecamatan list | 2/2 | 1.0000 |
+| seen | old formation province | 0/2 | 0.0000 |
+| seen | repeal status | 1/8 | 0.1250 |
+| seen | transition validity | 7/11 | 0.6364 |
+| unseen | current province | 1/1 | 1.0000 |
+| unseen | gazette reference | 0/3 | 0.0000 |
+| unseen | kecamatan count | 0/3 | 0.0000 |
+| unseen | kecamatan list | 0/1 | 0.0000 |
+| unseen | old formation province | 0/2 | 0.0000 |
+| unseen | repeal status | 0/3 | 0.0000 |
+| unseen | transition validity | 2/4 | 0.5000 |
+
+Makna factual slot evaluation:
+
+- Pada seen split, `D` memperbaiki slot accuracy atas `B` (`0.5814` vs `0.4651`), terutama karena transition validity jauh lebih baik dan source/answer lebih terstruktur.
+- Pada unseen split, `D` sedikit lebih buruk daripada `B` pada slot accuracy (`0.1765` vs `0.2353`), terutama karena kasus Kabupaten Tanah Datar gagal pada jumlah kecamatan, daftar kecamatan, Lembaran Negara, provinsi asal pembentukan, dan repeal status.
+- Constrained output tidak mengubah slot accuracy (`B` dan `D` sama dengan raw untuk slot ini), sehingga post-processing source/JSON memang tidak memperbaiki substansi fakta.
+- Slot evaluation menguatkan batas klaim: `D` baik untuk traceability dan beberapa factual slots seen, tetapi belum reliable untuk factual slot generalization pada held-out law.
+
 Sebagai tindak lanjut decoding/format constraint, ditambahkan `scripts/postprocess_pasalid_natural_predictions.py`. Script ini tidak mengubah model, tetapi membuat varian constrained dengan cara:
 
 - mengambil `answer` dari JSON jika ada, atau membersihkan teks mentah jika JSON tidak valid;
