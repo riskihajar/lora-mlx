@@ -146,6 +146,21 @@ Review pairwise `30` contoh per split:
 | seen | 8 | 18 | 4 |
 | unseen | 10 | 19 | 1 |
 
+Benchmark efisiensi per-example `20` contoh per split, `--max-new-tokens 96`:
+
+| Split | Kondisi | Avg prompt tokens | Latency avg | Latency p95 | Generated tok/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| seen | A | 40.2 | 4.6856 | 4.8243 | 20.4989 |
+| seen | B | 224.6 | 4.7001 | 5.2113 | 15.2868 |
+| seen | C | 40.2 | 9.7087 | 10.2435 | 7.9568 |
+| seen | D | 224.6 | 7.1523 | 10.0381 | 9.9898 |
+| unseen | A | 33.0 | 3.6250 | 4.7000 | 18.9930 |
+| unseen | B | 260.4 | 4.2514 | 5.2415 | 16.4651 |
+| unseen | C | 33.0 | 9.8435 | 10.5666 | 5.9633 |
+| unseen | D | 260.4 | 7.6658 | 10.2440 | 9.2619 |
+
+Interpretasi efisiensi: `B` adalah baseline retrieval-only paling efisien, `C` mengurangi prompt token tetapi paling lambat karena biaya adapter inference, dan `D` menukar latency tambahan dengan source discipline serta naturalness yang lebih baik.
+
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 
 Eksperimen natural legal QA layak menjadi hasil utama jika:

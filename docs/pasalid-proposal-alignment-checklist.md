@@ -28,8 +28,8 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | Evidence support rate | 🟡 | Rubrik dan seed manual review sudah berjalan; review semi-otomatis `A/B/C` dan pairwise `B/D` sudah ada | Belum ada review final yang balanced untuk `A/B/C/D` | Review manual minimal `30-50` contoh per kondisi |
 | Unsupported answer rate | 🟡 | Kategori `unsupported-answer` dan `factually-wrong` sudah dihitung pada seed review | Belum cukup besar untuk klaim final | Coding manual balanced pada subset evaluasi final |
 | Ketepatan rujukan pasal atau bagian dokumen | 🟡 | QA utama masih lemah pada citation metrics; source prediction branch sudah bermakna | Citation di QA utama belum stabil | Pertahankan source branch sebagai pembanding attribution |
-| Jumlah token konteks saat inferensi | 🟡 | Benchmark awal sudah menunjukkan `C` mengurangi prompt token dibanding `B` | Token masih proxy berbasis `split()` | Hitung token dengan tokenizer model |
-| Latensi p50 / p95 | ✅ | Benchmark clean sudah mendukung mode per-example | Perlu diperbesar dari subset `10` contoh jika akan jadi angka final tesis | Jalankan benchmark final pada subset lebih besar |
+| Jumlah token konteks saat inferensi | ✅ | Benchmark clean dan natural QA sudah memakai token tokenizer model; `C` mengurangi prompt token dibanding `B/D` | Token dihitung pada subset evaluasi benchmark, bukan seluruh test set | Laporkan ukuran subset bersama angka token |
+| Latensi p50 / p95 | ✅ | Benchmark clean dan natural QA sudah mendukung mode per-example; natural QA dijalankan pada `20` contoh per split | Jika akan jadi angka final tesis, angka dapat diperbesar lagi | Laporkan sebagai benchmark subset terkontrol |
 | Penggunaan memori | 🟡 | Peak RSS proxy sudah dicatat pada benchmark awal | Definisi dan prosedur ukur belum final | Tetapkan prosedur memory measurement yang konsisten |
 
 ## 3) Kesesuaian terhadap Tujuan Khusus Proposal
@@ -38,9 +38,9 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | --- | --- | --- | --- | --- |
 | Merancang artefak internalisasi dokumen ke adapter LoRA | ✅ | Pipeline artefak sudah ada: ingestion, doc units, QA generation, split A/B/C, training, evaluation, reporting | - | Pertahankan dan dokumentasikan |
 | Menetapkan rancangan dataset eksperimen yang terukur dan dapat direplikasi | ✅ | Natural legal QA final targeted sudah `535` row, train `338`, test gabungan `158`, dan pipeline generate/train/eval/review terdokumentasi | Coverage regulasi masih terbatas pada corpus Pasal.id lokal | Laporkan batas coverage dan jangan overclaim sebagai benchmark nasional |
-| Membandingkan performa A/B/C/D pada metrik utama dan pendukung | 🟡 | A/B/C/D sudah dibandingkan pada clean split dan natural legal QA final; pairwise review `B/D` sudah `30` seen + `30` unseen | Review manual belum mencakup A/C dan efisiensi natural QA belum diperbesar | Tambah audit manual targeted untuk failure case dan benchmark natural QA jika dibutuhkan |
+| Membandingkan performa A/B/C/D pada metrik utama dan pendukung | ✅ | A/B/C/D sudah dibandingkan pada clean split dan natural legal QA final; pairwise review `B/D` sudah `30` seen + `30` unseen; efisiensi natural QA sudah diukur per-example | Review manual belum mencakup A/C | Tambah audit A/C hanya jika dibutuhkan untuk lampiran |
 | Menganalisis sejauh mana C mendekati B dan melampaui A | 🟡 | Pola `B > C > A` muncul di beberapa setup yang stabil | Belum ada satu eksperimen final sebagai basis klaim utama | Kunci satu protokol final |
-| Merumuskan rekomendasi desain sistem yang seimbang antara kualitas, traceability, dan efisiensi | 🟡 | Sudah ada rekomendasi awal: QA utama dan source attribution dipisah; JSON `answer + source` paling layak; source prediction jadi branch attribution | Aspek efisiensi belum cukup terukur | Tambah metrik efisiensi dan finalisasi rekomendasi |
+| Merumuskan rekomendasi desain sistem yang seimbang antara kualitas, traceability, dan efisiensi | ✅ | Rekomendasi sudah didukung kualitas, traceability, copy-rate, dan efisiensi: `D` lebih disiplin sumber tetapi lebih lambat dari `B` | Memory masih proxy proses | Jika diperlukan, tambah prosedur memory terisolasi |
 
 ## 4) Ringkasan Kesiapan Saat Ini
 
@@ -199,7 +199,8 @@ Status terbaru QA final:
 | Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0378`; unseen: `D-B -0.0117`; `D` jauh lebih baik pada citation dan copy-rate |
 | Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `18/30` seen dan `19/30` unseen |
 | Failure audit natural `D` | ✅ | D failure rows: seen `13/30`, unseen `9/30`; targeted transition examples menurunkan failure unseen tetapi belum menyelesaikan answer completeness |
-| Next action QA | 🟡 | Perbaiki answer completeness/decoding constraint dan benchmark efisiensi natural QA |
+| Benchmark efisiensi natural QA per-example | ✅ | `20` contoh/split; `D` menambah latency atas `B`, sedangkan `C` prompt pendek tetapi paling lambat |
+| Next action QA | 🟡 | Perbaiki answer completeness dan decoding/format constraint |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
@@ -210,7 +211,7 @@ Status terbaru QA final:
 | Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama clean, natural legal QA, dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent dan task-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
 | Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
-| Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B`; klaim latency dan memory hanya boleh dibuat setelah benchmark final |
+| Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B/D`, bukan latency; `B` paling efisien untuk retrieval-only, sedangkan `D` menukar latency tambahan dengan source discipline lebih baik. Klaim memory tetap dibatasi karena masih proxy proses |
 
 Klaim yang sebaiknya dihindari:
 

@@ -422,6 +422,29 @@ Makna audit failure cases:
 
 Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
 
+Benchmark natural legal QA final juga dijalankan dengan preset `tinyllama_natural_legal`, split `data/pasalid/natural_legal_split/`, `20` contoh per split, mode `--per-example`, dan `--max-new-tokens 96`.
+
+Hasil natural legal QA:
+
+| Split | Kondisi | Avg prompt tokens | Latency avg | Latency p50 | Latency p95 | Generated tok/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seen | A | 40.2 | 4.6856 | 4.6739 | 4.8243 | 20.4989 |
+| seen | B | 224.6 | 4.7001 | 5.0188 | 5.2113 | 15.2868 |
+| seen | C | 40.2 | 9.7087 | 9.6954 | 10.2435 | 7.9568 |
+| seen | D | 224.6 | 7.1523 | 7.4189 | 10.0381 | 9.9898 |
+| unseen | A | 33.0 | 3.6250 | 4.6403 | 4.7000 | 18.9930 |
+| unseen | B | 260.4 | 4.2514 | 4.9996 | 5.2415 | 16.4651 |
+| unseen | C | 33.0 | 9.8435 | 9.7575 | 10.5666 | 5.9633 |
+| unseen | D | 260.4 | 7.6658 | 8.3172 | 10.2440 | 9.2619 |
+
+Makna benchmark natural legal QA:
+
+- `C` memang memakai prompt paling pendek, tetapi latency paling buruk karena adapter inference membuat decoding lebih lambat.
+- `D` memakai prompt sepanjang `B` dan menambah biaya latency sekitar `+2.45s` pada seen serta `+3.41s` pada unseen.
+- `B` menjadi baseline efisiensi terbaik untuk retrieval-only context: prompt lebih panjang daripada `A/C`, tetapi latency tetap dekat dengan `A` dan jauh lebih cepat daripada `D`.
+- Nilai kualitas/traceability `D` harus dibaca sebagai tradeoff: source discipline dan naturalness naik, tetapi runtime lebih mahal dibanding `B`.
+- Peak RSS masih proxy proses in-process dan belum cukup isolatif untuk klaim memory final.
+
 Hasil pada `10` contoh per split:
 
 | Split | Kondisi | Avg prompt tokens | Latency avg | Latency p50 | Latency p95 | Generated tok/s |

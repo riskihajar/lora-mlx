@@ -32,6 +32,10 @@ MODEL_PRESETS = {
         "model": "mlx_model",
         "adapter": "outputs/adapters/adapters_pasalid_tinyllama_native_expanded_clean.npz",
     },
+    "tinyllama_natural_legal": {
+        "model": "mlx_model",
+        "adapter": "outputs/adapters/adapters_pasalid_tinyllama_natural_legal.npz",
+    },
     "mistral_q4": {
         "model": "mlx_model_mistral_q4",
         "adapter": "outputs/adapters/adapters_pasalid_mistral_q4_experiment_long.npz",
