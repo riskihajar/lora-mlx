@@ -67,6 +67,7 @@ class DocToLoRAHypernetwork(nn.Module):
         rank: int = 8,
         scale: float = 20.0,
         spec_conditioning: bool = False,
+        per_rank_gen: bool = False,
     ):
         super().__init__()
         if not module_specs:
@@ -77,6 +78,7 @@ class DocToLoRAHypernetwork(nn.Module):
         self.rank = rank
         self.scale = scale
         self.spec_conditioning = spec_conditioning
+        self.per_rank_gen = per_rank_gen
         self.encoder = HashContextEncoder(feature_size)
         self.proj = nn.Linear(feature_size, hidden_size)
         self.spec_embeddings = None
@@ -84,11 +86,22 @@ class DocToLoRAHypernetwork(nn.Module):
             self.spec_embeddings = mx.random.normal(
                 (len(self.module_specs), hidden_size)
             ) * 0.02
+        self.rank_embeddings = None
+        if per_rank_gen:
+            self.rank_embeddings = mx.random.normal((rank, hidden_size)) * 0.02
         self.a_heads = [
-            nn.Linear(hidden_size, spec.input_dims * rank) for spec in self.module_specs
+            nn.Linear(
+                hidden_size,
+                spec.input_dims if per_rank_gen else spec.input_dims * rank,
+            )
+            for spec in self.module_specs
         ]
         self.b_heads = [
-            nn.Linear(hidden_size, rank * spec.output_dims) for spec in self.module_specs
+            nn.Linear(
+                hidden_size,
+                spec.output_dims if per_rank_gen else rank * spec.output_dims,
+            )
+            for spec in self.module_specs
         ]
 
     def encode_text(self, text: str) -> mx.array:
@@ -109,8 +122,13 @@ class DocToLoRAHypernetwork(nn.Module):
             spec_hidden = hidden
             if self.spec_embeddings is not None:
                 spec_hidden = spec_hidden + self.spec_embeddings[idx]
-            lora_a = a_head(spec_hidden).reshape(spec.input_dims, self.rank) * init_scale
-            lora_b = b_head(spec_hidden).reshape(self.rank, spec.output_dims) * init_scale
+            if self.per_rank_gen:
+                rank_hidden = spec_hidden[None, :] + self.rank_embeddings
+                lora_a = a_head(rank_hidden).T * init_scale
+                lora_b = b_head(rank_hidden) * init_scale
+            else:
+                lora_a = a_head(spec_hidden).reshape(spec.input_dims, self.rank) * init_scale
+                lora_b = b_head(spec_hidden).reshape(self.rank, spec.output_dims) * init_scale
             generated.append(
                 GeneratedLoRA(
                     layer_idx=spec.layer_idx,
@@ -179,6 +197,7 @@ class TokenDocToLoRAHypernetwork(nn.Module):
         rank: int = 8,
         scale: float = 20.0,
         spec_conditioning: bool = False,
+        per_rank_gen: bool = False,
     ):
         super().__init__()
         self.context_encoder = HashedTokenContextEncoder(
@@ -193,6 +212,7 @@ class TokenDocToLoRAHypernetwork(nn.Module):
             rank=rank,
             scale=scale,
             spec_conditioning=spec_conditioning,
+            per_rank_gen=per_rank_gen,
         )
 
     def __call__(self, context_ids: mx.array) -> list[GeneratedLoRA]:

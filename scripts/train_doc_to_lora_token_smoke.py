@@ -60,6 +60,11 @@ def parse_args():
         help="Add learned layer/module embeddings before each LoRA head.",
     )
     parser.add_argument(
+        "--per-rank-gen",
+        action="store_true",
+        help="Generate each LoRA rank from a separate rank-conditioned latent.",
+    )
+    parser.add_argument(
         "--context-encoder",
         choices=["hash", "token-hash"],
         default="hash",
@@ -352,6 +357,7 @@ def main():
             rank=args.rank,
             scale=20.0,
             spec_conditioning=args.spec_conditioning,
+            per_rank_gen=args.per_rank_gen,
         )
     else:
         hypernet = DocToLoRAHypernetwork(
@@ -361,6 +367,7 @@ def main():
             rank=args.rank,
             scale=20.0,
             spec_conditioning=args.spec_conditioning,
+            per_rank_gen=args.per_rank_gen,
         )
     examples = build_examples(tokenizer, args)
     eval_examples = []
@@ -409,6 +416,7 @@ def main():
     print(f"context_encoder={args.context_encoder}")
     print(f"context_latents={args.context_latents}")
     print(f"spec_conditioning={args.spec_conditioning}")
+    print(f"per_rank_gen={args.per_rank_gen}")
     print(f"train_examples={len(examples)}")
     print(f"eval_examples={len(eval_examples)}")
 

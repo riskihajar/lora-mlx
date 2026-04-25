@@ -22,4 +22,5 @@ PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
   --context-encoder token-hash \
   --context-buckets 8192 \
   --context-latents 8 \
+  --per-rank-gen \
   --loss-scope full-answer

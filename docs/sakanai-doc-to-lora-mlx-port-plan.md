@@ -175,6 +175,29 @@ context_encoder=token-hash
 context_latents=8
 ```
 
+SakanaAI's main scripts use `per_rank_gen=True`, so the MLX path now supports `--per-rank-gen`. This generates each LoRA rank from a rank-conditioned latent instead of emitting all rank rows from one head output. Validated output with `per_rank_gen=True`:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+response_tokens=52
+initial_loss=13.541703
+final_loss=5.143357
+improvement=2.63x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=14.407256
+final_eval_loss=5.265038
+final_eval_token_acc=0.200
+eval_improvement=2.74x
+context_encoder=token-hash
+context_latents=8
+per_rank_gen=True
+```
+
+This is the current default wrapper setting because it matches SakanaAI config and slightly improves held-out loss over the latent-only non-per-rank run (`2.74x` vs `2.66x` eval improvement).
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text
