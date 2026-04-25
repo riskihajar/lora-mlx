@@ -117,6 +117,15 @@ To run the same path on the SakanaAI-aligned Gemma MLX model:
 source ~/.zshrc && scripts/train_doc_to_lora_gemma_token_smoke.sh mlx-community/gemma-2-2b-it 3
 ```
 
+The `mlx-community/gemma-2-2b-it` smoke has been validated with the minimal configuration above:
+
+```text
+initial_loss=14.297681
+final_loss=0.000137
+improvement=104112.53x
+final_acc=1.000
+```
+
 The older local `mlx_model` smoke has also been validated with a minimal configuration:
 
 ```text
@@ -125,8 +134,6 @@ final_loss=0.000015
 improvement=849323.69x
 final_acc=1.000
 ```
-
-`mlx-community/gemma-2-2b-it` was not present in the local Hugging Face cache during this update, so the Gemma smoke wrapper is prepared but not force-run to avoid an implicit multi-GB download.
 
 If a local Gemma MLX checkpoint is preferred, either download `mlx-community/gemma-2-2b-it` through the loader or convert the original Hugging Face model to MLX. Access to Google's Gemma license may be required for the original `google/gemma-2-2b-it` checkpoint:
 
