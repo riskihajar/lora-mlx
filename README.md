@@ -146,6 +146,22 @@ source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat \
 
 Matrix mode loads each variant sequentially to avoid keeping all models in memory at once.
 
+## Working Doc-To-LoRA Baseline
+
+Build a document-specific LoRA adapter from a `.txt` or `.md` file:
+
+```bash
+source ~/.zshrc && scripts/train_doc_to_lora_tinyllama.sh examples/my_document.txt my_document 300
+```
+
+Query the resulting adapter without passing the source document as context:
+
+```bash
+source ~/.zshrc && scripts/query_doc_to_lora_tinyllama.sh my_document "Apa fakta utama dari dokumen ini?"
+```
+
+See `docs/doc-to-lora-workflow.md` for the full workflow and caveats.
+
 ## Default Paths
 
 - data: `data/`
