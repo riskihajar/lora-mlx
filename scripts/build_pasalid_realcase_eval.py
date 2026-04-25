@@ -29,7 +29,18 @@ def is_usable(row: dict, max_source_chars: int) -> bool:
     if max_source_chars > 0 and len(source_doc) > max_source_chars:
         return False
     lowered = source_doc.lower()
-    noisy_markers = ["line truncated", " . .", "repu].ik", "repuellik", "repuelik"]
+    noisy_markers = [
+        "line truncated",
+        " . .",
+        "merr,",
+        "darrr",
+        "i[",
+        "ihdonesta",
+        "repu].ik",
+        "repueuk",
+        "repuellik",
+        "repuelik",
+    ]
     return not any(marker in lowered for marker in noisy_markers)
 
 
