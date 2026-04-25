@@ -37,13 +37,36 @@ The current baseline in this repo is useful but different: it builds supervised 
 
 ## Implementation Order
 
-1. Add MLX generated-LoRA data structures and patch helpers.
-2. Add a small context-to-LoRA hypernetwork skeleton.
-3. Add a smoke script with synthetic facts and a tiny train/eval loop.
+1. Add MLX generated-LoRA data structures and patch helpers. Done in `src/lora_mlx/doc_to_lora.py`.
+2. Add a small context-to-LoRA hypernetwork skeleton. Done in `DocToLoRAHypernetwork`.
+3. Add a smoke script with synthetic facts and a tiny train/eval loop. Started in `scripts/train_doc_to_lora_hypernet_smoke.py`.
 4. Replace hash/text features with model-derived context activations.
 5. Add Perceiver-style aggregation.
 6. Add chunk merge support.
 7. Run Pasal.id document internalization experiments.
+
+## Synthetic Training Smoke Test
+
+Run a small teacher-adapter imitation task:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_hypernet_smoke.py \
+  --iters 40 \
+  --num-docs 4 \
+  --hidden-size 64
+```
+
+The script creates synthetic documents, assigns each document a deterministic target LoRA adapter, and trains the hypernetwork to reproduce the adapter effect from the document text feature. This verifies that the native MLX path can optimize hypernetwork parameters for `context -> generated LoRA A/B`.
+
+Expected smoke output should show loss reduction, for example:
+
+```text
+initial_loss=0.100526
+final_loss=0.023121
+improvement=4.35x
+```
+
+This is still not a result on natural language QA. It only validates the training mechanics needed before adding model-derived context features and a real document QA objective.
 
 ## Claim Boundary
 
