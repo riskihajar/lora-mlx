@@ -68,6 +68,53 @@ improvement=4.35x
 
 This is still not a result on natural language QA. It only validates the training mechanics needed before adding model-derived context features and a real document QA objective.
 
+## Token-Level End-To-End Smoke Test
+
+Run the smallest token-level version with a random toy MLX transformer:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  --toy \
+  --iters 20 \
+  --num-docs 3 \
+  --hidden-size 64 \
+  --rank 2 \
+  --max-specs 1
+```
+
+This script trains the hypernetwork through the frozen model's next-token loss. For each synthetic document it generates LoRA weights, patches selected transformer projections, runs the model forward, and backpropagates token cross-entropy into the hypernetwork.
+
+Expected smoke output should show token loss improvement, for example:
+
+```text
+initial_loss=4.895902
+final_loss=4.356647
+improvement=1.12x
+```
+
+To run the same path on the MLX model used by the document-specific baseline:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  --model mlx_model \
+  --iters 20 \
+  --num-docs 3 \
+  --lora-layers 1 \
+  --max-specs 1
+```
+
+If `mlx_model` is not available, convert a Hugging Face model to 4-bit MLX first:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.convert \
+  --hf-path TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+  --mlx-path mlx_model \
+  --quantize \
+  --q-bits 4
+```
+
+The token-level smoke test still uses synthetic documents and synthetic target token ids. It is the first end-to-end gradient check, not a natural document QA result.
+
 ## Claim Boundary
 
 Until steps 3-7 are complete, report this as a native MLX D2L port in progress. Do not claim equivalence to SakanaAI results or instant document internalization from the current baseline alone.

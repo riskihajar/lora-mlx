@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+import argparse
+import math
+from dataclasses import dataclass
+from pathlib import Path
+
+import mlx.core as mx
+import mlx.nn as nn
+import mlx.optimizers as optim
+import numpy as np
+
+from lora_mlx import utils as lora_utils
+from lora_mlx.doc_to_lora import (
+    DocToLoRAHypernetwork,
+    GeneratedLoRALinear,
+    infer_lora_module_specs,
+)
+from lora_mlx.models import Model, ModelArgs
+
+
+@dataclass(frozen=True)
+class TokenExample:
+    document: str
+    prompt_ids: mx.array
+    target_id: int
+
+
+class ToyTokenizer:
+    def __init__(self, vocab_size: int):
+        self.vocab_size = vocab_size
+
+    def encode(self, text: str):
+        values = []
+        for token in text.lower().split():
+            bucket = sum(token.encode("utf-8")) % (self.vocab_size - 4)
+            values.append(bucket + 4)
+        return values or [1]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Train a native MLX Doc-to-LoRA hypernetwork through token loss."
+    )
+    parser.add_argument("--model", default="mlx_model")
+    parser.add_argument("--toy", action="store_true", help="Use a tiny random MLX model.")
+    parser.add_argument("--num-docs", type=int, default=4)
+    parser.add_argument("--feature-size", type=int, default=64)
+    parser.add_argument("--hidden-size", type=int, default=128)
+    parser.add_argument("--rank", type=int, default=4)
+    parser.add_argument("--lora-layers", type=int, default=1)
+    parser.add_argument("--target-modules", default="q_proj,v_proj")
+    parser.add_argument("--iters", type=int, default=60)
+    parser.add_argument("--learning-rate", type=float, default=2e-3)
+    parser.add_argument("--seed", type=int, default=11)
+    parser.add_argument("--toy-vocab-size", type=int, default=96)
+    parser.add_argument("--max-specs", type=int, default=2)
+    return parser.parse_args()
+
+
+def build_toy_model(args):
+    model_args = ModelArgs(
+        hidden_size=32,
+        num_hidden_layers=2,
+        intermediate_size=64,
+        num_attention_heads=4,
+        rms_norm_eps=1e-5,
+        vocab_size=args.toy_vocab_size,
+    )
+    model = Model(model_args)
+    tokenizer = ToyTokenizer(args.toy_vocab_size)
+    return model, tokenizer
+
+
+def load_model(args):
+    if args.toy:
+        return build_toy_model(args)
+    model_path = Path(args.model)
+    if not model_path.exists() and args.model == "mlx_model":
+        outputs_model = Path("outputs/models/mlx_model")
+        if outputs_model.exists():
+            args.model = str(outputs_model)
+    return lora_utils.load(args.model)[:2]
+
+
+def build_examples(tokenizer, args) -> list[TokenExample]:
+    examples = []
+    for doc_id in range(args.num_docs):
+        answer_token = 8 + doc_id
+        document = (
+            f"Synthetic document {doc_id}. "
+            f"The internalized answer token is synthetic_{answer_token}."
+        )
+        prompt = f"Document memory {doc_id}. Question secret answer? Answer"
+        prompt_ids = tokenizer.encode(prompt)
+        target_id = answer_token % tokenizer.vocab_size
+        examples.append(
+            TokenExample(
+                document=document,
+                prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
+                target_id=target_id,
+            )
+        )
+    return examples
+
+
+def module_lookup(model):
+    return {
+        (spec.layer_idx, spec.module_name): spec
+        for spec in infer_lora_module_specs(model, lora_layers=None)
+    }
+
+
+def apply_dynamic_generated_loras(model, generated_loras):
+    layers = model.model.layers
+    for generated_lora in generated_loras:
+        layer = layers[generated_lora.layer_idx]
+        if generated_lora.module_name in {"q_proj", "k_proj", "v_proj", "o_proj"}:
+            current = getattr(layer.self_attn, generated_lora.module_name)
+            linear = current.linear if isinstance(current, GeneratedLoRALinear) else current
+            setattr(
+                layer.self_attn,
+                generated_lora.module_name,
+                GeneratedLoRALinear(linear, generated_lora),
+            )
+        elif generated_lora.module_name in {"gate_proj", "down_proj", "up_proj"}:
+            current = getattr(layer.mlp, generated_lora.module_name)
+            linear = current.linear if isinstance(current, GeneratedLoRALinear) else current
+            setattr(
+                layer.mlp,
+                generated_lora.module_name,
+                GeneratedLoRALinear(linear, generated_lora),
+            )
+        else:
+            raise ValueError(f"unsupported module {generated_lora.module_name!r}")
+
+
+def make_loss(model, examples):
+    def loss_fn(hypernet):
+        losses = []
+        for example in examples:
+            generated = hypernet.generate_from_text(example.document)
+            apply_dynamic_generated_loras(model, generated)
+            logits, _ = model(example.prompt_ids[None, :])
+            next_token_logits = logits[:, -1, :].astype(mx.float32)
+            target = mx.array([example.target_id], dtype=mx.int32)
+            losses.append(nn.losses.cross_entropy(next_token_logits, target).mean())
+        return mx.mean(mx.stack(losses))
+
+    return loss_fn
+
+
+def accuracy(model, hypernet, examples):
+    correct = 0
+    for example in examples:
+        generated = hypernet.generate_from_text(example.document)
+        apply_dynamic_generated_loras(model, generated)
+        logits, _ = model(example.prompt_ids[None, :])
+        pred = mx.argmax(logits[:, -1, :], axis=-1).item()
+        correct += int(pred == example.target_id)
+    return correct / len(examples)
+
+
+def main():
+    args = parse_args()
+    np.random.seed(args.seed)
+    mx.random.seed(args.seed)
+
+    model, tokenizer = load_model(args)
+    model.freeze()
+
+    target_modules = [x.strip() for x in args.target_modules.split(",") if x.strip()]
+    specs = infer_lora_module_specs(
+        model,
+        target_modules=target_modules,
+        lora_layers=args.lora_layers,
+    )
+    if args.max_specs > 0:
+        specs = specs[: args.max_specs]
+    if not specs:
+        raise SystemExit("no target LoRA modules found")
+
+    hypernet = DocToLoRAHypernetwork(
+        specs,
+        feature_size=args.feature_size,
+        hidden_size=args.hidden_size,
+        rank=args.rank,
+        scale=20.0,
+    )
+    examples = build_examples(tokenizer, args)
+    loss_fn = make_loss(model, examples)
+    loss_and_grad = nn.value_and_grad(hypernet, loss_fn)
+    optimizer = optim.Adam(learning_rate=args.learning_rate)
+
+    initial_loss = loss_fn(hypernet).item()
+    initial_acc = accuracy(model, hypernet, examples)
+    for step in range(args.iters):
+        loss_value, grads = loss_and_grad(hypernet)
+        optimizer.update(hypernet, grads)
+        mx.eval(hypernet.parameters(), optimizer.state, loss_value)
+        if step == 0 or (step + 1) % max(args.iters // 4, 1) == 0:
+            print(f"iter {step + 1}: loss={loss_value.item():.6f}")
+
+    final_loss = loss_fn(hypernet).item()
+    final_acc = accuracy(model, hypernet, examples)
+    improvement = initial_loss / final_loss if final_loss > 0 else math.inf
+    print(f"initial_loss={initial_loss:.6f}")
+    print(f"final_loss={final_loss:.6f}")
+    print(f"improvement={improvement:.2f}x")
+    print(f"initial_acc={initial_acc:.3f}")
+    print(f"final_acc={final_acc:.3f}")
+    print(f"target_modules={','.join(target_modules)}")
+    print(f"num_specs={len(specs)}")
+
+    if final_loss >= initial_loss * 0.9 and final_acc <= initial_acc:
+        raise SystemExit("token smoke task did not improve")
+
+
+if __name__ == "__main__":
+    main()
