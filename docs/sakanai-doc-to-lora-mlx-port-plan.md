@@ -37,6 +37,88 @@ mlx-community/gemma-2-2b-it
 
 TinyLlama remains useful only as a small local baseline. It should not be treated as the SakanaAI-equivalent target model.
 
+## Dataset Alignment
+
+The upstream SakanaAI main experiment uses the `SakanaAI/self_gen_qa_d2l` dataset. For the Gemma setup, the relevant prefix is:
+
+```text
+google/gemma-2-2b-it_temp_0.0_closed_qa_prob_1.0
+```
+
+The main config mixes self-generated examples from:
+
+```text
+fw_qa_v2/min_0_to_2000/train/*level_1*.parquet
+pwc_compact
+squad_compact
+ropes_compact
+drop_compact
+```
+
+Use the local bridge script to list and selectively fetch small slices instead of downloading the full upstream dataset, which is about 100 GB per model according to the upstream README:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/prepare_sakana_d2l_dataset.py \
+  --list-files \
+  --datasets squad_compact \
+  --max-files 1
+```
+
+Validated file discovery:
+
+```text
+google/gemma-2-2b-it_temp_0.0_closed_qa_prob_1.0/squad_compact/train/ds_0000.parquet
+```
+
+To download and convert a small sample to JSONL for the MLX token-level objective:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/prepare_sakana_d2l_dataset.py \
+  --download \
+  --convert \
+  --datasets squad_compact \
+  --max-files 1 \
+  --max-examples 64 \
+  --output data/doc_to_lora/sakana_gemma_squad_sample.jsonl
+```
+
+Then run the hypernetwork token objective on the Sakana-style sample:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  --model mlx-community/gemma-2-2b-it \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_squad_sample.jsonl \
+  --max-examples 8 \
+  --iters 10 \
+  --lora-layers 1 \
+  --target-modules down_proj \
+  --max-specs 1 \
+  --hidden-size 32 \
+  --rank 1
+```
+
+Validated minimal Gemma run on the converted Sakana `squad_compact` sample:
+
+```text
+max_examples=4
+iters=3
+initial_loss=14.131864
+final_loss=4.223494
+improvement=3.35x
+final_acc=1.000
+```
+
+This is still a first-token objective, not full answer generation. Its value is isolating the data path: the same native MLX hypernetwork can now train against upstream SakanaAI self-generated D2L examples.
+
+This enables the comparison we need:
+
+1. Sakana dataset plus ordinary per-document LoRA baseline.
+2. Sakana dataset plus native MLX hypernetwork-generated LoRA.
+3. Pasal.id dataset plus ordinary per-document LoRA baseline.
+4. Pasal.id dataset plus native MLX hypernetwork-generated LoRA.
+
+That matrix separates whether gains come from the dataset format, the hypernetwork architecture, or the domain data.
+
 ## Minimum Native MLX MVP
 
 1. Infer target linear modules from the loaded MLX model.

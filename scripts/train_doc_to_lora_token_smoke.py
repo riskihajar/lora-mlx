@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,6 +59,12 @@ def parse_args():
     parser.add_argument("--toy-vocab-size", type=int, default=96)
     parser.add_argument("--max-specs", type=int, default=2)
     parser.add_argument(
+        "--dataset-jsonl",
+        default=None,
+        help="Optional JSONL with document/context, prompt/question, and response/answer fields.",
+    )
+    parser.add_argument("--max-examples", type=int, default=8)
+    parser.add_argument(
         "--target-token-prefix",
         default="the",
         help="Tokenizer token used as the first synthetic target; later docs offset from it.",
@@ -91,6 +98,9 @@ def load_model(args):
 
 
 def build_examples(tokenizer, args) -> list[TokenExample]:
+    if args.dataset_jsonl:
+        return build_examples_from_jsonl(tokenizer, args.dataset_jsonl, args.max_examples)
+
     examples = []
     vocab_size = get_vocab_size(tokenizer)
     base_target_id = get_token_id(tokenizer, args.target_token_prefix, default=8)
@@ -109,6 +119,36 @@ def build_examples(tokenizer, args) -> list[TokenExample]:
                 target_id=target_id,
             )
         )
+    return examples
+
+
+def build_examples_from_jsonl(tokenizer, path: str, max_examples: int) -> list[TokenExample]:
+    examples = []
+    with open(path, "r") as fid:
+        for line in fid:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            document = row.get("document") or row.get("context")
+            prompt = row.get("prompt") or row.get("question")
+            response = row.get("response") or row.get("answer")
+            if not document or not prompt or not response:
+                continue
+            prompt_ids = tokenizer.encode(prompt)
+            response_ids = tokenizer.encode(response)
+            if not prompt_ids or not response_ids:
+                continue
+            examples.append(
+                TokenExample(
+                    document=document,
+                    prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
+                    target_id=int(response_ids[0]),
+                )
+            )
+            if len(examples) >= max_examples:
+                break
+    if not examples:
+        raise ValueError(f"no usable examples found in {path}")
     return examples
 
 
