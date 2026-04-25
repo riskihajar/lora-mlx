@@ -14,6 +14,7 @@ from lora_mlx import utils as lora_utils
 from lora_mlx.doc_to_lora import (
     DocToLoRAHypernetwork,
     GeneratedLoRALinear,
+    TokenDocToLoRAHypernetwork,
     infer_lora_module_specs,
 )
 from lora_mlx.models import Model, ModelArgs
@@ -22,6 +23,7 @@ from lora_mlx.models import Model, ModelArgs
 @dataclass(frozen=True)
 class TokenExample:
     document: str
+    document_ids: mx.array
     prompt_ids: mx.array
     response_ids: mx.array
 
@@ -50,6 +52,13 @@ def parse_args():
     parser.add_argument("--num-docs", type=int, default=4)
     parser.add_argument("--feature-size", type=int, default=64)
     parser.add_argument("--hidden-size", type=int, default=128)
+    parser.add_argument("--context-buckets", type=int, default=4096)
+    parser.add_argument(
+        "--context-encoder",
+        choices=["hash", "token-hash"],
+        default="hash",
+        help="Use deterministic text hash features or trainable hashed token features.",
+    )
     parser.add_argument("--rank", type=int, default=4)
     parser.add_argument("--lora-layers", type=int, default=1)
     parser.add_argument("--target-modules", default="down_proj")
@@ -127,6 +136,7 @@ def build_examples(tokenizer, args) -> list[TokenExample]:
         examples.append(
             TokenExample(
                 document=document,
+                document_ids=mx.array(tokenizer.encode(document), dtype=mx.int32),
                 prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
                 response_ids=mx.array([target_id], dtype=mx.int32),
             )
@@ -153,6 +163,7 @@ def build_examples_from_jsonl(tokenizer, path: str, max_examples: int) -> list[T
             examples.append(
                 TokenExample(
                     document=document,
+                    document_ids=mx.array(tokenizer.encode(document), dtype=mx.int32),
                     prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
                     response_ids=mx.array(response_ids, dtype=mx.int32),
                 )
@@ -224,7 +235,7 @@ def make_loss(model, examples, loss_scope: str):
     def loss_fn(hypernet):
         losses = []
         for example in examples:
-            generated = hypernet.generate_from_text(example.document)
+            generated = generate_loras(hypernet, example)
             apply_dynamic_generated_loras(model, generated)
             logits, targets = teacher_forced_response_logits(model, example, loss_scope)
             losses.append(nn.losses.cross_entropy(logits, targets).mean())
@@ -250,7 +261,7 @@ def teacher_forced_response_logits(model, example, loss_scope: str):
 def accuracy(model, hypernet, examples, loss_scope: str):
     correct = 0
     for example in examples:
-        generated = hypernet.generate_from_text(example.document)
+        generated = generate_loras(hypernet, example)
         apply_dynamic_generated_loras(model, generated)
         logits, targets = teacher_forced_response_logits(model, example, loss_scope)
         preds = mx.argmax(logits, axis=-1)
@@ -262,7 +273,7 @@ def token_accuracy(model, hypernet, examples, loss_scope: str):
     correct = 0
     total = 0
     for example in examples:
-        generated = hypernet.generate_from_text(example.document)
+        generated = generate_loras(hypernet, example)
         apply_dynamic_generated_loras(model, generated)
         logits, targets = teacher_forced_response_logits(model, example, loss_scope)
         preds = mx.argmax(logits, axis=-1)
@@ -275,6 +286,12 @@ def response_token_count(examples, loss_scope: str):
     if loss_scope == "first-token":
         return len(examples)
     return sum(len(example.response_ids) for example in examples)
+
+
+def generate_loras(hypernet, example):
+    if isinstance(hypernet, TokenDocToLoRAHypernetwork):
+        return hypernet(example.document_ids)
+    return hypernet.generate_from_text(example.document)
 
 
 def metrics(model, hypernet, examples, loss_scope: str):
@@ -319,13 +336,23 @@ def main():
     if not specs:
         raise SystemExit("no target LoRA modules found")
 
-    hypernet = DocToLoRAHypernetwork(
-        specs,
-        feature_size=args.feature_size,
-        hidden_size=args.hidden_size,
-        rank=args.rank,
-        scale=20.0,
-    )
+    if args.context_encoder == "token-hash":
+        hypernet = TokenDocToLoRAHypernetwork(
+            specs,
+            num_buckets=args.context_buckets,
+            feature_size=args.feature_size,
+            hidden_size=args.hidden_size,
+            rank=args.rank,
+            scale=20.0,
+        )
+    else:
+        hypernet = DocToLoRAHypernetwork(
+            specs,
+            feature_size=args.feature_size,
+            hidden_size=args.hidden_size,
+            rank=args.rank,
+            scale=20.0,
+        )
     examples = build_examples(tokenizer, args)
     eval_examples = []
     if args.eval_examples > 0:
@@ -370,6 +397,7 @@ def main():
     print(f"target_modules={','.join(target_modules)}")
     print(f"num_specs={len(specs)}")
     print(f"loss_scope={args.loss_scope}")
+    print(f"context_encoder={args.context_encoder}")
     print(f"train_examples={len(examples)}")
     print(f"eval_examples={len(eval_examples)}")
 

@@ -114,6 +114,51 @@ class DocToLoRAHypernetwork(nn.Module):
         return self(self.encode_text(text))
 
 
+class HashedTokenContextEncoder(nn.Module):
+    """Trainable mean-pooled token encoder with bounded embedding size."""
+
+    def __init__(self, num_buckets: int = 4096, feature_size: int = 256):
+        super().__init__()
+        if num_buckets <= 0:
+            raise ValueError("num_buckets must be positive")
+        self.num_buckets = num_buckets
+        self.embedding = nn.Embedding(num_buckets, feature_size)
+        self.norm = nn.RMSNorm(feature_size)
+
+    def __call__(self, token_ids: mx.array) -> mx.array:
+        if len(token_ids.shape) != 1:
+            token_ids = token_ids.reshape(-1)
+        token_ids = token_ids.astype(mx.int32) % self.num_buckets
+        x = self.embedding(token_ids)
+        return self.norm(mx.mean(x, axis=0))
+
+
+class TokenDocToLoRAHypernetwork(nn.Module):
+    """Generate LoRA matrices from trainable token-level context features."""
+
+    def __init__(
+        self,
+        module_specs: Sequence[LoRAModuleSpec],
+        num_buckets: int = 4096,
+        feature_size: int = 256,
+        hidden_size: int = 512,
+        rank: int = 8,
+        scale: float = 20.0,
+    ):
+        super().__init__()
+        self.context_encoder = HashedTokenContextEncoder(num_buckets, feature_size)
+        self.hypernet = DocToLoRAHypernetwork(
+            module_specs,
+            feature_size=feature_size,
+            hidden_size=hidden_size,
+            rank=rank,
+            scale=scale,
+        )
+
+    def __call__(self, context_ids: mx.array) -> list[GeneratedLoRA]:
+        return self.hypernet(self.context_encoder(context_ids))
+
+
 class GeneratedLoRALinear(nn.Module):
     def __init__(self, linear: nn.Linear, generated_lora: GeneratedLoRA):
         super().__init__()

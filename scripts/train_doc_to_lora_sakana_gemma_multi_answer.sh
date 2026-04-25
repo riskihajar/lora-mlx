@@ -21,4 +21,6 @@ PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
   --max-specs 2 \
   --hidden-size 128 \
   --rank 4 \
+  --context-encoder token-hash \
+  --context-buckets 8192 \
   --loss-scope full-answer

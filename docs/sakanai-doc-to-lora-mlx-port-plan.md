@@ -119,7 +119,7 @@ source ~/.zshrc && scripts/train_doc_to_lora_sakana_gemma_multi_answer.sh \
   mlx-community/gemma-2-2b-it
 ```
 
-Validated output:
+Validated output with the original deterministic hash context encoder:
 
 ```text
 train_examples=4
@@ -136,7 +136,26 @@ final_eval_loss=17.204411
 eval_improvement=0.81x
 ```
 
-Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples, but this minimal hash-encoder/MLP generator does not generalize yet. That isolates the next bottleneck as architecture, not dataset availability: we need a model-derived context encoder and Perceiver-style aggregator to approach SakanaAI's design.
+Validated output after replacing the deterministic hash feature with a trainable hashed-token context encoder:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+response_tokens=52
+initial_loss=13.130325
+final_loss=5.914184
+improvement=2.22x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=13.960747
+final_eval_loss=7.599777
+final_eval_token_acc=0.200
+eval_improvement=1.84x
+context_encoder=token-hash
+```
+
+Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples and improves a held-out example when the context encoder is learnable. This isolates a real architectural effect: dataset availability alone was not enough; replacing static hash features with trainable token context features improves both train and eval loss. The next SakanaAI parity gap is adding a model-derived context encoder and Perceiver-style aggregator.
 
 This enables the comparison we need:
 
