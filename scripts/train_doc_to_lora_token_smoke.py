@@ -65,6 +65,12 @@ def parse_args():
     )
     parser.add_argument("--max-examples", type=int, default=8)
     parser.add_argument(
+        "--eval-examples",
+        type=int,
+        default=0,
+        help="Hold out the last N loaded examples for eval-only metrics.",
+    )
+    parser.add_argument(
         "--loss-scope",
         choices=["first-token", "full-answer"],
         default="full-answer",
@@ -271,6 +277,29 @@ def response_token_count(examples, loss_scope: str):
     return sum(len(example.response_ids) for example in examples)
 
 
+def metrics(model, hypernet, examples, loss_scope: str):
+    if not examples:
+        return None
+    loss_value = make_loss(model, examples, loss_scope)(hypernet).item()
+    exact = accuracy(model, hypernet, examples, loss_scope)
+    token_acc = token_accuracy(model, hypernet, examples, loss_scope)
+    return {
+        "loss": loss_value,
+        "exact_acc": exact,
+        "token_acc": token_acc,
+        "response_tokens": response_token_count(examples, loss_scope),
+    }
+
+
+def print_metrics(prefix: str, values: dict | None):
+    if values is None:
+        return
+    print(f"{prefix}_loss={values['loss']:.6f}")
+    print(f"{prefix}_exact_acc={values['exact_acc']:.3f}")
+    print(f"{prefix}_token_acc={values['token_acc']:.3f}")
+    print(f"{prefix}_response_tokens={values['response_tokens']}")
+
+
 def main():
     args = parse_args()
     np.random.seed(args.seed)
@@ -298,6 +327,13 @@ def main():
         scale=20.0,
     )
     examples = build_examples(tokenizer, args)
+    eval_examples = []
+    if args.eval_examples > 0:
+        if args.eval_examples >= len(examples):
+            raise ValueError("eval_examples must be smaller than total loaded examples")
+        eval_examples = examples[-args.eval_examples :]
+        examples = examples[: -args.eval_examples]
+
     loss_fn = make_loss(model, examples, args.loss_scope)
     loss_and_grad = nn.value_and_grad(hypernet, loss_fn)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -305,6 +341,7 @@ def main():
     initial_loss = loss_fn(hypernet).item()
     initial_acc = accuracy(model, hypernet, examples, args.loss_scope)
     initial_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
+    initial_eval = metrics(model, hypernet, eval_examples, args.loss_scope)
     for step in range(args.iters):
         loss_value, grads = loss_and_grad(hypernet)
         optimizer.update(hypernet, grads)
@@ -315,6 +352,7 @@ def main():
     final_loss = loss_fn(hypernet).item()
     final_acc = accuracy(model, hypernet, examples, args.loss_scope)
     final_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
+    final_eval = metrics(model, hypernet, eval_examples, args.loss_scope)
     improvement = initial_loss / final_loss if final_loss > 0 else math.inf
     print(f"initial_loss={initial_loss:.6f}")
     print(f"final_loss={final_loss:.6f}")
@@ -324,9 +362,16 @@ def main():
     print(f"initial_token_acc={initial_token_acc:.3f}")
     print(f"final_token_acc={final_token_acc:.3f}")
     print(f"response_tokens={response_token_count(examples, args.loss_scope)}")
+    print_metrics("initial_eval", initial_eval)
+    print_metrics("final_eval", final_eval)
+    if initial_eval is not None and final_eval is not None:
+        eval_improvement = initial_eval["loss"] / final_eval["loss"] if final_eval["loss"] > 0 else math.inf
+        print(f"eval_improvement={eval_improvement:.2f}x")
     print(f"target_modules={','.join(target_modules)}")
     print(f"num_specs={len(specs)}")
     print(f"loss_scope={args.loss_scope}")
+    print(f"train_examples={len(examples)}")
+    print(f"eval_examples={len(eval_examples)}")
 
     if final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")

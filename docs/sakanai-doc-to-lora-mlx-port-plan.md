@@ -108,6 +108,36 @@ final_acc=0.000
 
 This is now a full-answer teacher-forced objective. Exact full-answer match is still too strict for this tiny overfit run, but the result verifies the full path: upstream SakanaAI dataset tokens -> Gemma MLX -> generated LoRA on `down_proj` -> full response token loss -> hypernetwork update.
 
+For a small multi-example run with held-out eval metrics:
+
+```bash
+source ~/.zshrc && scripts/train_doc_to_lora_sakana_gemma_multi_answer.sh \
+  data/doc_to_lora/sakana_gemma_squad_sample.jsonl \
+  12 \
+  5 \
+  1 \
+  mlx-community/gemma-2-2b-it
+```
+
+Validated output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+response_tokens=52
+initial_loss=13.131772
+final_loss=12.259892
+improvement=1.07x
+initial_token_acc=0.000
+final_token_acc=0.058
+initial_eval_loss=13.930460
+final_eval_loss=17.204411
+eval_improvement=0.81x
+```
+
+Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples, but this minimal hash-encoder/MLP generator does not generalize yet. That isolates the next bottleneck as architecture, not dataset availability: we need a model-derived context encoder and Perceiver-style aggregator to approach SakanaAI's design.
+
 This enables the comparison we need:
 
 1. Sakana dataset plus ordinary per-document LoRA baseline.
