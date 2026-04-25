@@ -37,7 +37,7 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | Tujuan Proposal | Status | Bukti Saat Ini | Gap Utama | Next Action |
 | --- | --- | --- | --- | --- |
 | Merancang artefak internalisasi dokumen ke adapter LoRA | ✅ | Pipeline artefak sudah ada: ingestion, doc units, QA generation, split A/B/C, training, evaluation, reporting | - | Pertahankan dan dokumentasikan |
-| Menetapkan rancangan dataset eksperimen yang terukur dan dapat direplikasi | ✅ | Natural legal QA final filtered sudah `576` row, train `366`, test gabungan `170`, dan pipeline generate/train/eval/review terdokumentasi | Coverage regulasi masih terbatas pada corpus Pasal.id lokal | Laporkan batas coverage dan jangan overclaim sebagai benchmark nasional |
+| Menetapkan rancangan dataset eksperimen yang terukur dan dapat direplikasi | ✅ | Natural legal QA final targeted sudah `535` row, train `338`, test gabungan `158`, dan pipeline generate/train/eval/review terdokumentasi | Coverage regulasi masih terbatas pada corpus Pasal.id lokal | Laporkan batas coverage dan jangan overclaim sebagai benchmark nasional |
 | Membandingkan performa A/B/C/D pada metrik utama dan pendukung | 🟡 | A/B/C/D sudah dibandingkan pada clean split dan natural legal QA final; pairwise review `B/D` sudah `30` seen + `30` unseen | Review manual belum mencakup A/C dan efisiensi natural QA belum diperbesar | Tambah audit manual targeted untuk failure case dan benchmark natural QA jika dibutuhkan |
 | Menganalisis sejauh mana C mendekati B dan melampaui A | 🟡 | Pola `B > C > A` muncul di beberapa setup yang stabil | Belum ada satu eksperimen final sebagai basis klaim utama | Kunci satu protokol final |
 | Merumuskan rekomendasi desain sistem yang seimbang antara kualitas, traceability, dan efisiensi | 🟡 | Sudah ada rekomendasi awal: QA utama dan source attribution dipisah; JSON `answer + source` paling layak; source prediction jadi branch attribution | Aspek efisiensi belum cukup terukur | Tambah metrik efisiensi dan finalisasi rekomendasi |
@@ -195,11 +195,11 @@ Status terbaru QA final:
 | Kesimpulan clean TinyLlama | ✅ | Clean split memperkuat `D` sebagai context-use adapter; `C` tidak stabil dan tidak layak jadi klaim utama final |
 | Review clean `B` vs `D` | ✅ | LLM-assisted review `20` contoh/split mendukung `D` pada factual/evidence/source baik seen maupun unseen |
 | Benchmark efisiensi clean per-example | ✅ | Token dihitung dengan tokenizer; `C` mengurangi prompt token tetapi belum lebih cepat; `D` kualitas tinggi dengan latency lebih mahal dari `B` |
-| Natural legal QA final filtered | ✅ | `576` row; train `366`, valid `40`, test_seen `132`, test_unseen `38`; unit report-like difilter dari held-out law |
-| Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0262`; unseen: `D-B -0.0036`; `D` jauh lebih baik pada citation dan copy-rate |
-| Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `20/30` seen dan `16/30` unseen |
-| Failure audit natural `D` | ✅ | D failure rows: seen `9/30`, unseen `16/30`; pola utama semantic drift, question echo, incomplete answer, wrong polarity, dan entity confusion |
-| Next action QA | 🟡 | Perbaiki residual data noise/error negasi dan benchmark efisiensi natural QA |
+| Natural legal QA final targeted | ✅ | `535` row; train `338`, valid `39`, test_seen `119`, test_unseen `39`; report-like rows `0`, targeted transition rows `42` |
+| Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0378`; unseen: `D-B -0.0117`; `D` jauh lebih baik pada citation dan copy-rate |
+| Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `18/30` seen dan `19/30` unseen |
+| Failure audit natural `D` | ✅ | D failure rows: seen `13/30`, unseen `9/30`; targeted transition examples menurunkan failure unseen tetapi belum menyelesaikan answer completeness |
+| Next action QA | 🟡 | Perbaiki answer completeness/decoding constraint dan benchmark efisiensi natural QA |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 

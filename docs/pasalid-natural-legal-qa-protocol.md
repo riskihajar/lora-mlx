@@ -41,6 +41,7 @@ Filter final:
 - unit laporan keuangan/report-like dibuang karena lebih cocok untuk table/numeric QA daripada legal QA normatif;
 - respons LLM yang bukan JSON valid dilewati agar satu respons rusak tidak menggagalkan seluruh build;
 - held-out law dipilih dari law dengan jumlah row cukup agar `test_unseen` tidak terlalu kecil.
+- contoh targeted ditambahkan untuk pasal peralihan/repeal agar pola "masih berlaku sepanjang tidak bertentangan" dan "dicabut/dinyatakan tidak berlaku" lebih terwakili.
 
 ## Kondisi Eksperimen
 
@@ -124,26 +125,26 @@ Dataset final LLM-assisted filtered:
 
 | Item | Nilai |
 | --- | ---: |
-| total rows | 576 |
-| train rows | 366 |
-| valid rows | 40 |
-| test seen rows | 132 |
-| test unseen rows | 38 |
+| total rows | 535 |
+| train rows | 338 |
+| valid rows | 39 |
+| test seen rows | 119 |
+| test unseen rows | 39 |
 | laws | 17 |
 
 Hasil otomatis TinyLlama natural legal:
 
 | Split | B F1 | D F1 | D - B | D Citation EM | D Copy >10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| seen | 0.2733 | 0.2995 | +0.0262 | 0.5909 | 0.1970 |
-| unseen | 0.3335 | 0.3299 | -0.0036 | 0.6579 | 0.2632 |
+| seen | 0.2720 | 0.3098 | +0.0378 | 0.6639 | 0.1681 |
+| unseen | 0.3361 | 0.3244 | -0.0117 | 0.6410 | 0.3333 |
 
 Review pairwise `30` contoh per split:
 
 | Split | Overall B Wins | D Wins | Ties |
 | --- | ---: | ---: | ---: |
-| seen | 6 | 20 | 4 |
-| unseen | 13 | 16 | 1 |
+| seen | 8 | 18 | 4 |
+| unseen | 10 | 19 | 1 |
 
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 

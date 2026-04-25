@@ -77,10 +77,27 @@ def is_usable(row: dict, max_source_chars: int) -> bool:
         "laporan keuangan",
         "laporan realisasi anggaran",
         "laporan perubahan",
+        "laporan operasional",
         "neraca",
         "arus kas",
     ]
     if any(marker in lowered for marker in financial_markers):
+        return False
+    budget_markers = [
+        "apbn",
+        "saldo anggaran",
+        "pendapatan negara",
+        "belanja negara",
+        "pembiayaan anggaran",
+        "postur apbn",
+    ]
+    if "tahun anggaran" in lowered and any(marker in lowered for marker in budget_markers):
+        return False
+    if "apbn terdiri atas anggaran" in lowered:
+        return False
+    if "tahun anggaran" in lowered and re.search(r"rp\s*[0-9so][0-9so\.\s,|]{6,}", lowered):
+        return False
+    if "aporan operasional" in lowered or "aporan perubahan" in lowered:
         return False
 
     return True
@@ -160,6 +177,44 @@ def fallback_examples(row: dict) -> list[tuple[str, str]]:
     ]
 
 
+def targeted_transition_examples(row: dict) -> list[tuple[str, str]]:
+    source_doc = normalize_space(row.get("source_doc", ""))
+    lowered = source_doc.lower()
+    reference = row.get("source_reference", "sumber hukum terkait")
+    subject = title_subject(row)
+    examples = []
+
+    if "masih tetap berlaku" in lowered and "sepanjang tidak bertentangan" in lowered:
+        examples.extend(
+            [
+                (
+                    f"Apakah aturan pelaksanaan lama terkait {subject} masih berlaku setelah aturan baru ini ada?",
+                    f"Masih berlaku, tetapi hanya sepanjang aturan pelaksanaan lama itu tidak bertentangan dengan ketentuan dalam aturan baru. Rujukannya adalah {reference}.",
+                ),
+                (
+                    "Kalau ada aturan turunan lama, apakah otomatis gugur atau tetap bisa dipakai?",
+                    f"Aturan turunan lama tidak otomatis gugur. Aturan itu tetap bisa dipakai selama tidak bertentangan dengan ketentuan baru sebagaimana disebut dalam {reference}.",
+                ),
+            ]
+        )
+
+    if "dicabut" in lowered and "dinyatakan tidak berlaku" in lowered:
+        examples.extend(
+            [
+                (
+                    f"Apakah ketentuan lama tentang {subject} masih berlaku setelah aturan baru ini berlaku?",
+                    f"Tidak. Ketentuan lama yang mengatur hal tersebut dicabut dan dinyatakan tidak berlaku berdasarkan {reference}.",
+                ),
+                (
+                    "Apa nasib aturan lama yang disebut dalam pasal peralihan ini?",
+                    f"Aturan lama yang disebut dalam pasal tersebut tidak lagi berlaku karena sudah dicabut dan dinyatakan tidak berlaku. Dasarnya adalah {reference}.",
+                ),
+            ]
+        )
+
+    return examples
+
+
 def llm_examples(row: dict, questions_per_doc: int) -> list[tuple[str, str]]:
     from lora_mlx.openai_compat import generate_text
 
@@ -208,7 +263,10 @@ def build_rows(docs: list[dict], limit: int, questions_per_doc: int, use_llm: bo
     seen = set()
     generation = "llm_natural_paraphrase" if use_llm else "heuristic_natural_bootstrap"
     for doc in docs:
-        examples = llm_examples(doc, questions_per_doc) if use_llm else fallback_examples(doc)
+        targeted = targeted_transition_examples(doc)
+        remaining = max(0, questions_per_doc - len(targeted))
+        generated = llm_examples(doc, remaining) if use_llm and remaining else fallback_examples(doc)
+        examples = (targeted + generated)[:questions_per_doc]
         for question, answer in examples:
             key = (question, doc.get("source_reference", ""))
             if key in seen:
