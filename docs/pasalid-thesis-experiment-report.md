@@ -298,23 +298,24 @@ Interpretasi real-case eval:
 
 ### Natural legal QA LLM-assisted
 
-Untuk mengurangi ketergantungan pada pertanyaan template dan jawaban extractive, dibuat dataset natural legal QA dengan `scripts/build_pasalid_natural_legal_qa.py --use-llm`. Generator menghasilkan pertanyaan user-style dan jawaban parafrase natural, tetapi tetap menyimpan citation terstruktur dan source reference dari `doc_units`. Builder kemudian diberi filter tambahan untuk mengecualikan unit laporan keuangan/report-like yang lebih cocok untuk table/numeric QA daripada legal QA normatif. Split juga dibuat agar held-out law tidak dipilih dari law dengan jumlah row terlalu kecil. Setelah failure audit, builder diperketat lagi untuk menghapus residual APBN/report-like dan menambahkan contoh targeted untuk pasal peralihan/repeal, jumlah kecamatan, provinsi/wilayah hukum, dasar pembentukan, Lembaran Negara, dan pasal pemerintahan daerah yang hanya merujuk peraturan perundang-undangan.
+Untuk mengurangi ketergantungan pada pertanyaan template dan jawaban extractive, dibuat dataset natural legal QA dengan `scripts/build_pasalid_natural_legal_qa.py --use-llm`. Generator menghasilkan pertanyaan user-style dan jawaban parafrase natural, tetapi tetap menyimpan citation terstruktur dan source reference dari `doc_units`. Builder kemudian diberi filter tambahan untuk mengecualikan unit laporan keuangan/report-like yang lebih cocok untuk table/numeric QA daripada legal QA normatif. Split juga dibuat agar held-out law tidak dipilih dari law dengan jumlah row terlalu kecil. Setelah failure audit, builder diperketat lagi untuk menghapus residual APBN/report-like dan menambahkan contoh targeted untuk pasal peralihan/repeal, jumlah kecamatan, provinsi/wilayah hukum, dasar pembentukan, Lembaran Negara, dan pasal pemerintahan daerah yang hanya merujuk peraturan perundang-undangan. Ronde terakhir menambahkan `targeted_slot_repair` yang diprioritaskan untuk provinsi awal pembentukan, nomor/tahun Lembaran Negara, OCR angka kecamatan, dan jawaban repeal yang harus menyebut "dicabut dan dinyatakan tidak berlaku".
 
 Ringkasan dataset:
 
 | Item | Nilai |
 | --- | ---: |
-| total rows | 538 |
+| total rows | 541 |
 | laws | 17 |
-| train rows | 340 |
-| valid rows | 38 |
-| test seen rows | 122 |
-| test unseen rows | 38 |
+| train rows | 341 |
+| valid rows | 39 |
+| test seen rows | 121 |
+| test unseen rows | 40 |
 | answer style | natural paraphrase with structured citation |
-| avg max source copy run | 4.2937 |
+| avg max source copy run | 4.2458 |
 | max source copy run | 10 |
 | report-like rows | 0 |
-| targeted completeness/transition rows | 154 |
+| targeted slot-repair rows | 79 |
+| targeted completeness/transition rows | 135 |
 
 Artefak lokal:
 
@@ -324,29 +325,29 @@ Artefak lokal:
 - adapter: `outputs/adapters/adapters_pasalid_tinyllama_natural_legal.npz`
 - prediction export: `outputs/predictions/pasalid_natural_legal/`
 
-Training TinyLlama natural legal pada dataset final targeted-completeness selesai sampai `1000` iterasi. Validation loss turun dari `2.111` pada iterasi awal menjadi `1.060` pada iterasi `1000`.
+Training TinyLlama natural legal pada dataset final targeted-slot-repair selesai sampai `1000` iterasi. Validation loss turun dari `2.074` pada iterasi awal menjadi `1.031` pada iterasi `1000`.
 
 Hasil otomatis `A/B/C/D`:
 
 | Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | D Citation EM | D Citation Component |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| seen (`122`) | 0.1938 | 0.2707 | 0.2241 | 0.3341 | +0.0303 | +0.0634 | 0.5738 | 0.5840 |
-| unseen (`38`) | 0.1948 | 0.2902 | 0.2266 | 0.3432 | +0.0319 | +0.0530 | 0.6579 | 0.6579 |
+| seen (`121`) | 0.1807 | 0.2564 | 0.2272 | 0.2886 | +0.0465 | +0.0322 | 0.4959 | 0.5021 |
+| unseen (`40`) | 0.1810 | 0.3180 | 0.2381 | 0.3101 | +0.0571 | -0.0079 | 0.5750 | 0.5750 |
 
 Copy dan format metrics:
 
 | Split | Kondisi | Valid JSON | Avg Copy Run | Source 4-gram Copy Ratio | Copy Run >10 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| seen | B | 0.0000 | 10.3770 | 0.2582 | 0.3443 |
-| seen | D | 0.6066 | 8.5984 | 0.2571 | 0.2459 |
-| unseen | B | 0.0000 | 12.7632 | 0.2608 | 0.3158 |
-| unseen | D | 0.6842 | 8.2895 | 0.2901 | 0.1842 |
+| seen | B | 0.0000 | 8.7025 | 0.2312 | 0.2975 |
+| seen | D | 0.5950 | 6.0496 | 0.1627 | 0.1322 |
+| unseen | B | 0.0000 | 13.4000 | 0.3519 | 0.4250 |
+| unseen | D | 0.6750 | 6.0000 | 0.2057 | 0.1500 |
 
 Interpretasi natural legal QA:
 
-- Dataset final targeted-completeness ini memenuhi target ukuran minimum praktis: train di atas `300` dan test gabungan `160` contoh.
-- `D` menjadi kondisi terbaik pada seen dan unseen split untuk answer F1, serta tetap jauh lebih baik daripada `B` pada citation/valid JSON.
-- Targeted completeness examples membalik hasil unseen dari `D-B -0.0117` menjadi `D-B +0.0530`, tetapi valid JSON raw `D` turun dibanding run sebelumnya sehingga format constraint tetap relevan.
+- Dataset final targeted-slot-repair ini memenuhi target ukuran minimum praktis: train di atas `300` dan test gabungan `161` contoh.
+- `D` tetap unggul atas `B` pada seen answer F1 dan jauh lebih baik pada citation/valid JSON, tetapi tidak lagi unggul pada unseen answer F1 setelah slot-repair (`D-B -0.0079`).
+- Targeted slot-repair memperbaiki factual slot accuracy unseen dibanding run sebelumnya, tetapi menurunkan margin answer F1 dan tidak menyelesaikan old-province/gazette/repeal secara konsisten.
 - `C` tidak memberi manfaat stabil; nilainya hanya mendekati `A` dan jauh di bawah `B/D`, sehingga adapter-only inference tetap tidak layak menjadi kontribusi utama.
 - Hasil natural legal QA memperkuat bahwa kontribusi LoRA lebih tepat ditulis sebagai peningkatan disiplin penggunaan konteks/source pada kondisi `D`, bukan sebagai peningkatan answer F1 universal pada semua split.
 - Sebelum hasil ini dijadikan klaim final, hasil review LLM perlu dilengkapi audit manual pada contoh gagal untuk membedakan error substansi nyata dari perbedaan parafrase atau format.
@@ -357,46 +358,46 @@ Ringkasan skor rata-rata pairwise:
 
 | Split | Metric | B Avg | D Avg | D - B |
 | --- | --- | ---: | ---: | ---: |
-| seen | factual correctness | 0.8333 | 0.9667 | +0.1333 |
-| seen | evidence support | 0.8333 | 1.0333 | +0.2000 |
-| seen | source traceability | 0.0333 | 1.2000 | +1.1667 |
-| seen | naturalness | 0.8667 | 1.0000 | +0.1333 |
-| unseen | factual correctness | 0.9667 | 0.9333 | -0.0333 |
-| unseen | evidence support | 1.0000 | 1.0667 | +0.0667 |
-| unseen | source traceability | 0.0000 | 1.1667 | +1.1667 |
-| unseen | naturalness | 0.7333 | 1.0333 | +0.3000 |
+| seen | factual correctness | 0.9000 | 0.8333 | -0.0667 |
+| seen | evidence support | 0.9667 | 0.9333 | -0.0333 |
+| seen | source traceability | 0.1000 | 1.0000 | +0.9000 |
+| seen | naturalness | 0.6667 | 0.8667 | +0.2000 |
+| unseen | factual correctness | 1.0667 | 0.7333 | -0.3333 |
+| unseen | evidence support | 1.2000 | 0.8333 | -0.3667 |
+| unseen | source traceability | 0.0000 | 1.1000 | +1.1000 |
+| unseen | naturalness | 0.8000 | 0.8667 | +0.0667 |
 
 Winner count pairwise:
 
 | Split | Metric | B Wins | D Wins | Ties |
 | --- | --- | ---: | ---: | ---: |
-| seen | factual correctness | 7 | 10 | 13 |
-| seen | evidence support | 6 | 11 | 13 |
-| seen | source traceability | 0 | 19 | 11 |
-| seen | naturalness | 8 | 12 | 10 |
-| seen | overall | 10 | 17 | 3 |
-| unseen | factual correctness | 9 | 9 | 12 |
-| unseen | evidence support | 6 | 8 | 16 |
-| unseen | source traceability | 0 | 18 | 12 |
-| unseen | naturalness | 5 | 13 | 12 |
-| unseen | overall | 8 | 16 | 6 |
+| seen | factual correctness | 9 | 8 | 13 |
+| seen | evidence support | 10 | 8 | 12 |
+| seen | source traceability | 3 | 17 | 10 |
+| seen | naturalness | 9 | 13 | 8 |
+| seen | overall | 13 | 16 | 1 |
+| unseen | factual correctness | 12 | 6 | 12 |
+| unseen | evidence support | 12 | 6 | 12 |
+| unseen | source traceability | 0 | 17 | 13 |
+| unseen | naturalness | 11 | 11 | 8 |
+| unseen | overall | 14 | 15 | 1 |
 
 Makna review pairwise natural legal QA:
 
-- Pada seen, `D` unggul overall dan juga membaik pada factual/evidence setelah targeted completeness examples ditambahkan.
-- Pada unseen, factual correctness menjadi tie secara winner count dan evidence support sedikit memihak `D`; `D` tetap jauh lebih kuat pada source traceability dan naturalness.
+- Pada seen, `D` masih unggul tipis overall karena traceability dan naturalness, tetapi factual/evidence tidak lagi unggul setelah slot-repair.
+- Pada unseen, `D` tetap unggul tipis overall dan source traceability, tetapi factual/evidence jelas memihak `B` pada sample review.
 - `B` hampir selalu dinilai `source-missing` dan sering `too-extractive`, sehingga F1 tinggi tidak otomatis berarti jawaban siap dipakai sebagai legal QA akuntabel.
 - `D` lebih traceable dan lebih natural, tetapi masih sering mendapat label `factually-wrong` atau `unsupported-answer`; ini menunjukkan adapter natural legal perlu perbaikan substansi, bukan hanya format.
-- Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff yang lebih kuat: LoRA + context memperbaiki answer F1, traceability, naturalness, dan copy-rate pada run targeted-completeness, tetapi factual correctness pada held-out law masih tidak dominan secara pairwise.
+- Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff yang lebih kuat: LoRA + context memperbaiki traceability, naturalness, valid JSON, dan copy-rate, tetapi answer F1 dan factual correctness held-out law tidak stabil setelah targeted slot-repair.
 
-Audit targeted kemudian dilakukan pada failure cases `D` dari pairwise review. Setelah targeted-completeness, audit ini dibuat reproducible dengan `scripts/summarize_pasalid_failure_audit.py`, yang membaca label review dan reason untuk mengelompokkan sisa failure.
+Audit targeted kemudian dilakukan pada failure cases `D` dari pairwise review. Setelah targeted slot-repair, audit ini dibuat reproducible dengan `scripts/summarize_pasalid_failure_audit.py`, yang membaca label review dan reason untuk mengelompokkan sisa failure.
 
 Ringkasan jumlah failure `D`:
 
 | Split | Reviewed Rows | Broad Failure Rows | Strict Failure Rows | Strict Failure Rate |
 | --- | ---: | ---: | ---: | ---: |
-| seen | 30 | 24 | 18 | 0.6000 |
-| unseen | 30 | 23 | 16 | 0.5333 |
+| seen | 30 | 27 | 21 | 0.7000 |
+| unseen | 30 | 23 | 20 | 0.6667 |
 
 `Broad failure` mencakup skor factual/evidence kurang dari `2` atau label error kuat. `Strict failure` hanya menghitung label `factually-wrong`, `unsupported-answer`, `source-wrong`, atau `source-missing`.
 
@@ -404,17 +405,17 @@ Kategori error utama `D` dari audit targeted:
 
 | Kategori | Seen | Unseen | Pola |
 | --- | ---: | ---: | --- |
-| substantive factual/evidence error | 11 | 12 | Jawaban masih salah atau unsupported pada sebagian query walau F1 naik |
-| entity/count/list confusion | 12 | 14 | Pertanyaan provinsi asal, jumlah kecamatan, Lembaran Negara, dan daftar wilayah masih rentan |
-| incomplete or wrong focus | 12 | 13 | Model menjawab tanggal saat ditanya provinsi, atau tidak menyebut detail kunci seperti nomor Lembaran Negara |
-| source/format error | 13 | 12 | JSON/source raw masih kadang hilang/salah meskipun constrained post-process bisa memperbaikinya |
-| too extractive | 12 | 15 | Jawaban masih sering menyalin frasa dokumen atau daftar mentah |
-| prompt/instruction echo or unnatural | 13 | 10 | Masih ada echo instruksi/referensi dan kalimat janggal |
-| polarity/transition confusion | 4 | 0 | Error peralihan/repeal jauh berkurang pada unseen, tetapi masih muncul pada seen sample |
+| substantive factual/evidence error | 11 | 16 | Jawaban masih salah atau unsupported pada sebagian query walau traceability naik |
+| entity/count/list confusion | 13 | 14 | Pertanyaan provinsi asal, jumlah kecamatan, Lembaran Negara, dan daftar wilayah masih rentan |
+| incomplete or wrong focus | 18 | 17 | Model menjawab tanggal saat ditanya provinsi, atau tidak menyebut detail kunci seperti nomor Lembaran Negara |
+| source/format error | 17 | 14 | JSON/source raw masih kadang hilang/salah meskipun constrained post-process bisa memperbaikinya |
+| too extractive | 15 | 15 | Jawaban masih sering menyalin frasa dokumen atau daftar mentah |
+| prompt/instruction echo or unnatural | 16 | 11 | Masih ada echo instruksi/referensi dan kalimat janggal |
+| polarity/transition confusion | 6 | 0 | Error peralihan/repeal masih muncul pada seen; unseen lebih didominasi entity/slot failures |
 
 Makna audit failure cases:
 
-- Targeted-completeness menaikkan F1 dan membuat `D` unggul overall, tetapi strict failure masih tinggi sehingga hasil tidak boleh dibaca sebagai solved legal QA.
+- Targeted slot-repair membuat `D` tetap unggul tipis overall karena traceability/naturalness, tetapi strict failure masih tinggi sehingga hasil tidak boleh dibaca sebagai solved legal QA.
 - Banyak kegagalan `D` tetap error substansi nyata, bukan sekadar perbedaan parafrase dengan gold answer.
 - Source/citation dan factual correctness harus dilaporkan terpisah: source dapat diperbaiki dengan constraint, sedangkan isi jawaban belum otomatis benar.
 - Pertanyaan held-out law yang melibatkan provinsi asal pembentukan, angka kecamatan, Lembaran Negara, dan daftar wilayah masih menjadi residual bottleneck.
@@ -427,10 +428,10 @@ Hasil factual slot evaluation raw `B` vs `D`:
 
 | Split | Kondisi | Slot Checks | Correct | Slot Accuracy |
 | --- | --- | ---: | ---: | ---: |
-| seen | B raw | 43 | 20 | 0.4651 |
-| seen | D raw | 43 | 25 | 0.5814 |
-| unseen | B raw | 17 | 4 | 0.2353 |
-| unseen | D raw | 17 | 3 | 0.1765 |
+| seen | B raw | 44 | 25 | 0.5682 |
+| seen | D raw | 44 | 22 | 0.5000 |
+| unseen | B raw | 21 | 10 | 0.4762 |
+| unseen | D raw | 21 | 9 | 0.4286 |
 
 Breakdown slot `D` raw:
 
@@ -439,22 +440,22 @@ Breakdown slot `D` raw:
 | seen | current province | 2/2 | 1.0000 |
 | seen | gazette reference | 2/6 | 0.3333 |
 | seen | kecamatan count | 11/12 | 0.9167 |
-| seen | kecamatan list | 2/2 | 1.0000 |
-| seen | old formation province | 0/2 | 0.0000 |
-| seen | repeal status | 1/8 | 0.1250 |
-| seen | transition validity | 7/11 | 0.6364 |
+| seen | kecamatan list | 0/2 | 0.0000 |
+| seen | old formation province | 0/3 | 0.0000 |
+| seen | repeal status | 3/11 | 0.2727 |
+| seen | transition validity | 4/8 | 0.5000 |
 | unseen | current province | 1/1 | 1.0000 |
-| unseen | gazette reference | 0/3 | 0.0000 |
-| unseen | kecamatan count | 0/3 | 0.0000 |
+| unseen | gazette reference | 1/4 | 0.2500 |
+| unseen | kecamatan count | 3/4 | 0.7500 |
 | unseen | kecamatan list | 0/1 | 0.0000 |
-| unseen | old formation province | 0/2 | 0.0000 |
-| unseen | repeal status | 0/3 | 0.0000 |
-| unseen | transition validity | 2/4 | 0.5000 |
+| unseen | old formation province | 1/4 | 0.2500 |
+| unseen | repeal status | 1/4 | 0.2500 |
+| unseen | transition validity | 2/3 | 0.6667 |
 
 Makna factual slot evaluation:
 
-- Pada seen split, `D` memperbaiki slot accuracy atas `B` (`0.5814` vs `0.4651`), terutama karena transition validity jauh lebih baik dan source/answer lebih terstruktur.
-- Pada unseen split, `D` sedikit lebih buruk daripada `B` pada slot accuracy (`0.1765` vs `0.2353`), terutama karena kasus Kabupaten Tanah Datar gagal pada jumlah kecamatan, daftar kecamatan, Lembaran Negara, provinsi asal pembentukan, dan repeal status.
+- Pada seen split, `D` lebih rendah daripada `B` pada slot accuracy (`0.5000` vs `0.5682`), terutama karena list extraction, old formation province, dan repeal status masih rapuh.
+- Pada unseen split, slot-repair menaikkan `D` dari `0.1765` ke `0.4286`, tetapi `B` masih sedikit lebih tinggi (`0.4762`); kasus Kabupaten Tanah Datar tetap gagal pada provinsi awal, Lembaran Negara, dan daftar kecamatan.
 - Constrained output tidak mengubah slot accuracy (`B` dan `D` sama dengan raw untuk slot ini), sehingga post-processing source/JSON memang tidak memperbaiki substansi fakta.
 - Slot evaluation menguatkan batas klaim: `D` baik untuk traceability dan beberapa factual slots seen, tetapi belum reliable untuk factual slot generalization pada held-out law.
 
@@ -470,16 +471,16 @@ Hasil constrained otomatis:
 
 | Split | Kondisi | Answer F1 | Answer Recall | Citation EM | Valid JSON | Prompt Echo | Instruction Echo |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| seen | B raw | 0.2707 | 0.3010 | 0.0000 | 0.0000 | 0.1639 | 0.2049 |
-| seen | B constrained | 0.2791 | 0.2790 | 1.0000 | 1.0000 | 0.0000 | 0.0246 |
-| seen | D raw | 0.3341 | 0.3186 | 0.5738 | 0.6066 | 0.0902 | 0.1475 |
-| seen | D constrained | 0.3256 | 0.2994 | 1.0000 | 1.0000 | 0.0082 | 0.0656 |
-| unseen | B raw | 0.2902 | 0.3120 | 0.0000 | 0.0000 | 0.2105 | 0.2105 |
-| unseen | B constrained | 0.2936 | 0.2860 | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
-| unseen | D raw | 0.3432 | 0.3103 | 0.6579 | 0.6842 | 0.0263 | 0.1053 |
-| unseen | D constrained | 0.3379 | 0.3054 | 1.0000 | 1.0000 | 0.0000 | 0.0789 |
+| seen | B raw | 0.2564 | 0.2781 | 0.0000 | 0.0000 | 0.1653 | 0.1901 |
+| seen | B constrained | 0.2592 | 0.2503 | 1.0000 | 1.0000 | 0.0083 | 0.0248 |
+| seen | D raw | 0.2886 | 0.2780 | 0.4959 | 0.5950 | 0.1240 | 0.2810 |
+| seen | D constrained | 0.2848 | 0.2557 | 1.0000 | 1.0000 | 0.0165 | 0.1570 |
+| unseen | B raw | 0.3180 | 0.3361 | 0.0000 | 0.0000 | 0.2000 | 0.2500 |
+| unseen | B constrained | 0.3210 | 0.3023 | 1.0000 | 1.0000 | 0.0000 | 0.0250 |
+| unseen | D raw | 0.3101 | 0.2836 | 0.5750 | 0.6750 | 0.0250 | 0.0750 |
+| unseen | D constrained | 0.3051 | 0.2789 | 1.0000 | 1.0000 | 0.0000 | 0.0500 |
 
-Review pairwise constrained `30` contoh per split:
+Review pairwise constrained `30` contoh per split belum direrun setelah slot-repair. Angka berikut adalah run constrained sebelumnya dan hanya dipakai sebagai bukti bahwa forcing JSON/source dapat menghilangkan perbedaan traceability secara desain:
 
 | Split | Metric | B Wins | D Wins | Ties |
 | --- | --- | ---: | ---: | ---: |

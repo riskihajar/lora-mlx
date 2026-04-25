@@ -130,31 +130,32 @@ source ~/.zshrc && PYTHONPATH=src python3 scripts/postprocess_pasalid_natural_pr
 
 ## Hasil Final Saat Ini
 
-Dataset final LLM-assisted filtered dengan targeted completeness:
+Dataset final LLM-assisted filtered dengan targeted slot-repair:
 
 | Item | Nilai |
 | --- | ---: |
-| total rows | 538 |
-| train rows | 340 |
-| valid rows | 38 |
-| test seen rows | 122 |
-| test unseen rows | 38 |
+| total rows | 541 |
+| train rows | 341 |
+| valid rows | 39 |
+| test seen rows | 121 |
+| test unseen rows | 40 |
 | laws | 17 |
-| targeted completeness/transition rows | 154 |
+| targeted slot-repair rows | 79 |
+| targeted completeness/transition rows | 135 |
 
 Hasil otomatis TinyLlama natural legal:
 
 | Split | B F1 | D F1 | D - B | D Citation EM | D Copy >10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| seen | 0.2707 | 0.3341 | +0.0634 | 0.5738 | 0.2459 |
-| unseen | 0.2902 | 0.3432 | +0.0530 | 0.6579 | 0.1842 |
+| seen | 0.2564 | 0.2886 | +0.0322 | 0.4959 | 0.1322 |
+| unseen | 0.3180 | 0.3101 | -0.0079 | 0.5750 | 0.1500 |
 
 Review pairwise `30` contoh per split:
 
 | Split | Overall B Wins | D Wins | Ties |
 | --- | ---: | ---: | ---: |
-| seen | 10 | 17 | 3 |
-| unseen | 8 | 16 | 6 |
+| seen | 13 | 16 | 1 |
+| unseen | 14 | 15 | 1 |
 
 Benchmark efisiensi per-example `20` contoh per split, `--max-new-tokens 96`:
 
@@ -175,19 +176,19 @@ Hasil constrained JSON/source:
 
 | Split | Kondisi | Answer F1 | Answer Recall | Citation EM | Valid JSON | Prompt Echo |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| seen | B constrained | 0.2791 | 0.2790 | 1.0000 | 1.0000 | 0.0000 |
-| seen | D constrained | 0.3256 | 0.2994 | 1.0000 | 1.0000 | 0.0082 |
-| unseen | B constrained | 0.2936 | 0.2860 | 1.0000 | 1.0000 | 0.0000 |
-| unseen | D constrained | 0.3379 | 0.3054 | 1.0000 | 1.0000 | 0.0000 |
+| seen | B constrained | 0.2592 | 0.2503 | 1.0000 | 1.0000 | 0.0083 |
+| seen | D constrained | 0.2848 | 0.2557 | 1.0000 | 1.0000 | 0.0165 |
+| unseen | B constrained | 0.3210 | 0.3023 | 1.0000 | 1.0000 | 0.0000 |
+| unseen | D constrained | 0.3051 | 0.2789 | 1.0000 | 1.0000 | 0.0000 |
 
-Review pairwise constrained `30` contoh per split:
+Review pairwise constrained `30` contoh per split belum direrun setelah slot-repair. Tabel berikut adalah run constrained sebelumnya:
 
 | Split | Overall B Wins | D Wins | Ties | Catatan |
 | --- | ---: | ---: | ---: | --- |
 | seen | 12 | 11 | 7 | Hampir tie setelah source/JSON dipaksa sama-sama rapi |
 | unseen | 11 | 13 | 6 | `D` unggul tipis dan tetap lebih rendah copy-rate |
 
-Interpretasi constrained: format/source constraint menyelesaikan JSON, citation, dan prompt echo, tetapi tidak otomatis menaikkan recall. Setelah targeted completeness, `D` tetap unggul F1 atas `B` pada constrained seen/unseen, sementara pairwise constrained menjadi lebih seimbang.
+Interpretasi constrained: format/source constraint menyelesaikan JSON dan citation, tetapi tidak otomatis menaikkan recall atau slot accuracy. Setelah targeted slot-repair, `D` tetap lebih baik pada constrained seen F1, tetapi lebih rendah dari `B` pada constrained unseen F1.
 
 Audit failure terbaru dapat direplikasi dengan:
 
@@ -200,10 +201,10 @@ Ringkasan residual failure `D`:
 
 | Split | Broad Failures | Strict Failures | Dominant Residual Pattern |
 | --- | ---: | ---: | --- |
-| seen | 24/30 | 18/30 | entity/count/list, source/format, incomplete focus |
-| unseen | 23/30 | 16/30 | entity/count/list, extractive output, incomplete focus |
+| seen | 27/30 | 21/30 | incomplete focus, source/format, unnatural/echo |
+| unseen | 23/30 | 20/30 | incomplete focus, factual/evidence, entity/count/list |
 
-Interpretasi audit: targeted completeness memperbaiki skor agregat, tetapi sisa bottleneck masih berada pada validasi isi jawaban untuk angka, provinsi asal, Lembaran Negara, daftar wilayah, dan status repeal.
+Interpretasi audit: targeted slot-repair memperbaiki sebagian slot held-out, tetapi strict failure tetap tinggi; sisa bottleneck utama berada pada validasi isi jawaban untuk provinsi asal, Lembaran Negara, daftar wilayah, dan status repeal.
 
 Evaluator factual slot ditambahkan untuk mengukur correctness fakta yang dapat diekstraksi tanpa LLM judge:
 
@@ -216,10 +217,10 @@ Ringkasan factual slot raw:
 
 | Split | B Correct / Total | B Acc. | D Correct / Total | D Acc. |
 | --- | ---: | ---: | ---: | ---: |
-| seen | 20/43 | 0.4651 | 25/43 | 0.5814 |
-| unseen | 4/17 | 0.2353 | 3/17 | 0.1765 |
+| seen | 25/44 | 0.5682 | 22/44 | 0.5000 |
+| unseen | 10/21 | 0.4762 | 9/21 | 0.4286 |
 
-Interpretasi slot: `D` memperbaiki factual slots pada seen, terutama transition validity, tetapi tidak generalize pada unseen Tanah Datar. Constraint JSON/source tidak mengubah slot accuracy, sehingga perbaikan berikutnya harus menargetkan isi jawaban.
+Interpretasi slot: slot-repair menaikkan `D` unseen dari `0.1765` ke `0.4286`, tetapi `B` masih sedikit lebih tinggi dan `D` turun pada seen. Constraint JSON/source tidak mengubah slot accuracy, sehingga perbaikan berikutnya harus berupa checker/decoding berbasis isi, bukan sekadar data tambahan.
 
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 

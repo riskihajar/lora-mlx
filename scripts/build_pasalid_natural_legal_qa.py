@@ -224,6 +224,77 @@ def targeted_transition_examples(row: dict) -> list[tuple[str, str]]:
     return examples
 
 
+def targeted_slot_repair_examples(row: dict) -> list[tuple[str, str]]:
+    source_doc = normalize_space(row.get("source_doc", ""))
+    lowered = source_doc.lower()
+    reference = row.get("source_reference", "sumber hukum terkait")
+    subject = short_entity(row)
+    examples = []
+
+    formation_source = source_doc
+    subject_index = source_doc.lower().find(subject.lower())
+    if subject_index != -1:
+        formation_source = source_doc[subject_index:]
+    formation_env_match = re.search(r"berdasarkan\s+Undang-undang\s+Nomor\s+([0-9Il]+)\s+Tahun\s+(\d{4}).*?dalam\s+lingkungan\s+Daerah\s+Propinsi\s+([^(.]+)", formation_source, flags=re.IGNORECASE)
+    if formation_env_match:
+        law_number = normalize_count(formation_env_match.group(1))
+        law_year = formation_env_match.group(2)
+        old_province = normalize_space(formation_env_match.group(3))
+        examples.extend(
+            [
+                (
+                    f"Kalau yang ditanya provinsi saat awal pembentukan {subject}, bukan tanggalnya, jawabannya apa?",
+                    f"Jawabannya adalah Daerah Propinsi {old_province}, bukan tanggal pembentukannya. Dasar pembentukan itu merujuk Undang-Undang Nomor {law_number} Tahun {law_year} sebagaimana disebut dalam {reference}.",
+                ),
+                (
+                    f"{subject} awalnya dibentuk dalam lingkungan Daerah Propinsi mana?",
+                    f"Pada awal pembentukannya, {subject} berada dalam lingkungan Daerah Propinsi {old_province}. Informasi ini tercantum dalam {reference}.",
+                ),
+            ]
+        )
+
+    gazette_match = re.search(r"Lembaran(?:-Negara| Negara)?(?:\s+Tahun\s+(\d{4}))?\s+Nomor\s+([0-9Il]+)(?:\s+Tahun\s+(\d{4}))?", source_doc, flags=re.IGNORECASE)
+    if gazette_match:
+        year = gazette_match.group(1) or gazette_match.group(3) or ""
+        number = normalize_count(gazette_match.group(2))
+        gazette = f"Lembaran Negara Nomor {number}" + (f" Tahun {year}" if year else "")
+        examples.append(
+            (
+                f"Kalau ditanya rujukan Lembaran Negara untuk {subject}, nomor dan tahunnya apa?",
+                f"Rujukan Lembaran Negaranya adalah {gazette}. Keterangan itu disebut dalam {reference}.",
+            )
+        )
+
+    count_match = re.search(r"terdiri atas\s+([0-9Il\s]+)\s*\(([^)]+)\)\s+Kecamatan", source_doc, flags=re.IGNORECASE)
+    if count_match:
+        raw_count = normalize_space(count_match.group(1))
+        count = normalize_count(raw_count)
+        count_words = normalize_space(count_match.group(2))
+        if re.search(r"[Il]", raw_count):
+            examples.append(
+                (
+                    f"Angka jumlah kecamatan {subject} di teks terlihat seperti '{raw_count}'. Itu harus dibaca berapa?",
+                    f"Angka itu harus dibaca sebagai {count} kecamatan atau {count_words} kecamatan, sesuai {reference}.",
+                )
+            )
+
+    if "dicabut" in lowered and "dinyatakan tidak berlaku" in lowered:
+        examples.extend(
+            [
+                (
+                    f"Untuk aturan lama tentang {subject}, jawaban lengkapnya cukup 'tidak berlaku' atau harus menyebut apa?",
+                    f"Jawaban lengkapnya harus menyebut bahwa ketentuan lama dicabut dan dinyatakan tidak berlaku berdasarkan {reference}.",
+                ),
+                (
+                    f"Status aturan lama tentang {subject}: masih berlaku, atau dicabut dan tidak berlaku?",
+                    f"Statusnya dicabut dan dinyatakan tidak berlaku. Dasarnya adalah {reference}.",
+                ),
+            ]
+        )
+
+    return examples
+
+
 def targeted_completeness_examples(row: dict) -> list[tuple[str, str]]:
     source_doc = normalize_space(row.get("source_doc", ""))
     lowered = source_doc.lower()
@@ -366,11 +437,14 @@ def build_rows(docs: list[dict], limit: int, questions_per_doc: int, use_llm: bo
     seen = set()
     generated_label = "llm_natural_paraphrase" if use_llm else "heuristic_natural_bootstrap"
     for doc in docs:
-        targeted = targeted_transition_examples(doc) + targeted_completeness_examples(doc)
+        targeted_repair = targeted_slot_repair_examples(doc)
+        targeted_other = targeted_transition_examples(doc) + targeted_completeness_examples(doc)
+        targeted = targeted_repair + targeted_other
         remaining = max(0, questions_per_doc - len(targeted))
         generated = llm_examples(doc, remaining) if use_llm and remaining else fallback_examples(doc)
         examples = (
-            [(question, answer, "targeted_completeness_and_transition") for question, answer in targeted]
+            [(question, answer, "targeted_slot_repair") for question, answer in targeted_repair]
+            + [(question, answer, "targeted_completeness_and_transition") for question, answer in targeted_other]
             + [(question, answer, generated_label) for question, answer in generated]
         )[:questions_per_doc]
         for question, answer, generation in examples:
@@ -457,6 +531,7 @@ def write_outputs(rows: list[dict], output: Path, split_dir: Path, seed: int) ->
         "laws": len({row["law_id"] for row in rows}),
         "answer_style": "natural_paraphrase_with_structured_citation",
         "avg_max_source_copy_run": sum(row["max_source_copy_run"] for row in rows) / len(rows),
+        "rows_on_slot_repair_patterns": sum(1 for row in rows if targeted_slot_repair_examples(row)),
         "rows_on_completeness_patterns": sum(1 for row in rows if targeted_completeness_examples(row)),
         "rows_on_transition_patterns": sum(1 for row in rows if targeted_transition_examples(row)),
         "source_generation_counts": dict(sorted(Counter(row["source_generation"] for row in rows).items())),

@@ -195,14 +195,14 @@ Status terbaru QA final:
 | Kesimpulan clean TinyLlama | ✅ | Clean split memperkuat `D` sebagai context-use adapter; `C` tidak stabil dan tidak layak jadi klaim utama final |
 | Review clean `B` vs `D` | ✅ | LLM-assisted review `20` contoh/split mendukung `D` pada factual/evidence/source baik seen maupun unseen |
 | Benchmark efisiensi clean per-example | ✅ | Token dihitung dengan tokenizer; `C` mengurangi prompt token tetapi belum lebih cepat; `D` kualitas tinggi dengan latency lebih mahal dari `B` |
-| Natural legal QA final targeted-completeness | ✅ | `538` row; train `340`, valid `38`, test_seen `122`, test_unseen `38`; report-like rows `0`, targeted completeness/transition rows `154` |
-| Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0634`; unseen: `D-B +0.0530`; `D` lebih baik pada answer F1, citation, dan copy-rate |
-| Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `17/30` seen dan `16/30` unseen |
-| Failure audit natural `D` | ✅ | Reproducible audit: strict failure seen `18/30`, unseen `16/30`; residual dominan entity/count/list, incomplete focus, extractive output, dan source/format raw |
-| Factual slot evaluation natural QA | ✅ | Slot checker deterministik: seen `D 25/43` vs `B 20/43`, unseen `D 3/17` vs `B 4/17`; constraint JSON/source tidak mengubah slot accuracy |
+| Natural legal QA final targeted-slot-repair | ✅ | `541` row; train `341`, valid `39`, test_seen `121`, test_unseen `40`; targeted slot-repair rows `79`, completeness/transition rows `135` |
+| Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0322`; unseen: `D-B -0.0079`; `D` tetap lebih baik pada citation, valid JSON, dan copy-rate |
+| Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `16/30` seen dan `15/30` unseen, tetapi factual/evidence tidak dominan |
+| Failure audit natural `D` | ✅ | Reproducible audit: strict failure seen `21/30`, unseen `20/30`; residual dominan incomplete focus, entity/count/list, source/format, dan factual/evidence |
+| Factual slot evaluation natural QA | ✅ | Slot checker deterministik: seen `D 22/44` vs `B 25/44`, unseen `D 9/21` vs `B 10/21`; slot-repair menaikkan unseen D tetapi belum melewati B |
 | Benchmark efisiensi natural QA per-example | ✅ | `20` contoh/split; `D` menambah latency atas `B`, sedangkan `C` prompt pendek tetapi paling lambat |
 | Format/source constrained natural QA | ✅ | Post-processing constrained membuat valid JSON/citation `1.0`; pairwise constrained menjadi seen `B 12`, `D 11`, tie `7` dan unseen `B 11`, `D 13`, tie `6` |
-| Next action QA | 🟡 | Gunakan slot failures untuk targeted data/decoding berikutnya: old formation province, Lembaran Negara, repeal status, dan held-out kecamatan Tanah Datar |
+| Next action QA | 🟡 | Tambah checker/decoding berbasis isi untuk old formation province, Lembaran Negara, repeal status, dan daftar kecamatan; data tambahan saja tidak cukup |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
@@ -210,7 +210,7 @@ Status terbaru QA final:
 | --- | --- |
 | Internalization | Adapter LoRA menunjukkan internalisasi parsial hanya pada setup tertentu; clean split menunjukkan `C` tidak stabil dan tidak boleh menjadi klaim utama tunggal |
 | Context baseline | Kondisi `B` tetap menjadi upper bound praktis terhadap adapter-only `C`; kondisi `D` diuji terpisah sebagai adapter dengan konteks |
-| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama clean, natural legal QA targeted-completeness, dan Mistral q4 long, tetapi gagal pada Qwen3; setelah format/source constraint diterapkan sama ke `B/D`, keunggulan `D` lebih kecil sehingga klaim harus model-dependent dan task-dependent |
+| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama clean, natural legal QA targeted-slot-repair untuk traceability/copy-rate, dan Mistral q4 long, tetapi gagal pada Qwen3; setelah format/source constraint diterapkan sama ke `B/D`, keunggulan `D` lebih kecil sehingga klaim harus model-dependent dan task-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
 | Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
 | Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B/D`, bukan latency; `B` paling efisien untuk retrieval-only, sedangkan `D` menukar latency tambahan dengan source discipline lebih baik. Klaim memory tetap dibatasi karena masih proxy proses |
