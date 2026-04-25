@@ -82,33 +82,31 @@ source ~/.zshrc && PYTHONPATH=src python3 scripts/prepare_sakana_d2l_dataset.py 
   --output data/doc_to_lora/sakana_gemma_squad_sample.jsonl
 ```
 
-Then run the hypernetwork token objective on the Sakana-style sample:
+Then run the hypernetwork token objective on the Sakana-style sample. The full-answer wrapper trains on all response tokens using original token IDs preserved from Sakana's parquet files:
 
 ```bash
-source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
-  --model mlx-community/gemma-2-2b-it \
-  --dataset-jsonl data/doc_to_lora/sakana_gemma_squad_sample.jsonl \
-  --max-examples 8 \
-  --iters 10 \
-  --lora-layers 1 \
-  --target-modules down_proj \
-  --max-specs 1 \
-  --hidden-size 32 \
-  --rank 1
+source ~/.zshrc && scripts/train_doc_to_lora_sakana_gemma_full_answer.sh \
+  data/doc_to_lora/sakana_gemma_squad_sample.jsonl \
+  30 \
+  1 \
+  mlx-community/gemma-2-2b-it
 ```
 
-Validated minimal Gemma run on the converted Sakana `squad_compact` sample:
+Validated Gemma full-answer run on the converted Sakana `squad_compact` sample:
 
 ```text
-max_examples=4
-iters=3
-initial_loss=14.131864
-final_loss=4.223494
-improvement=3.35x
-final_acc=1.000
+max_examples=1
+iters=30
+response_tokens=22
+initial_loss=12.703471
+final_loss=3.094043
+improvement=4.11x
+initial_token_acc=0.000
+final_token_acc=0.091
+final_acc=0.000
 ```
 
-This is still a first-token objective, not full answer generation. Its value is isolating the data path: the same native MLX hypernetwork can now train against upstream SakanaAI self-generated D2L examples.
+This is now a full-answer teacher-forced objective. Exact full-answer match is still too strict for this tiny overfit run, but the result verifies the full path: upstream SakanaAI dataset tokens -> Gemma MLX -> generated LoRA on `down_proj` -> full response token loss -> hypernetwork update.
 
 This enables the comparison we need:
 

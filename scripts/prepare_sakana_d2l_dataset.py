@@ -108,14 +108,16 @@ def extract_examples(row: dict, tokenizer=None) -> list[dict]:
     for prompt, response in zip(prompts, responses):
         if not prompt or not response:
             continue
-        out.append(
-            {
-                "document": context,
-                "prompt": prompt,
-                "response": response,
-                "source": "SakanaAI/self_gen_qa_d2l",
-            }
-        )
+        example = {
+            "document": context,
+            "prompt": prompt,
+            "response": response,
+            "source": "SakanaAI/self_gen_qa_d2l",
+        }
+        if "_prompt_ids" in row and "_response_ids" in row:
+            example["prompt_ids"] = row["_prompt_ids"][len(out)]
+            example["response_ids"] = row["_response_ids"][len(out)]
+        out.append(example)
     return out
 
 
@@ -137,6 +139,17 @@ def decode_prompt_response_pairs(row: dict, tokenizer) -> tuple[list[str], list[
         if prompt and response:
             prompts.append(prompt)
             responses.append(response)
+    row["_prompt_ids"] = []
+    row["_response_ids"] = []
+    for ids, span in zip(input_ids, spans):
+        if not ids or not span or len(span) != 2:
+            continue
+        start, end = int(span[0]), int(span[1])
+        prompt_ids = ids[:start]
+        response_ids = ids[start:end]
+        if prompt_ids and response_ids:
+            row["_prompt_ids"].append(prompt_ids)
+            row["_response_ids"].append(response_ids)
     return prompts, responses
 
 

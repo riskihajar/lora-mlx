@@ -23,7 +23,7 @@ from lora_mlx.models import Model, ModelArgs
 class TokenExample:
     document: str
     prompt_ids: mx.array
-    target_id: int
+    response_ids: mx.array
 
 
 class ToyTokenizer:
@@ -64,6 +64,12 @@ def parse_args():
         help="Optional JSONL with document/context, prompt/question, and response/answer fields.",
     )
     parser.add_argument("--max-examples", type=int, default=8)
+    parser.add_argument(
+        "--loss-scope",
+        choices=["first-token", "full-answer"],
+        default="full-answer",
+        help="Train on only the first response token or all response tokens.",
+    )
     parser.add_argument(
         "--target-token-prefix",
         default="the",
@@ -116,7 +122,7 @@ def build_examples(tokenizer, args) -> list[TokenExample]:
             TokenExample(
                 document=document,
                 prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
-                target_id=target_id,
+                response_ids=mx.array([target_id], dtype=mx.int32),
             )
         )
     return examples
@@ -134,15 +140,15 @@ def build_examples_from_jsonl(tokenizer, path: str, max_examples: int) -> list[T
             response = row.get("response") or row.get("answer")
             if not document or not prompt or not response:
                 continue
-            prompt_ids = tokenizer.encode(prompt)
-            response_ids = tokenizer.encode(response)
+            prompt_ids = row.get("prompt_ids") or tokenizer.encode(prompt)
+            response_ids = row.get("response_ids") or tokenizer.encode(response)
             if not prompt_ids or not response_ids:
                 continue
             examples.append(
                 TokenExample(
                     document=document,
                     prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
-                    target_id=int(response_ids[0]),
+                    response_ids=mx.array(response_ids, dtype=mx.int32),
                 )
             )
             if len(examples) >= max_examples:
@@ -208,30 +214,61 @@ def apply_dynamic_generated_loras(model, generated_loras):
             raise ValueError(f"unsupported module {generated_lora.module_name!r}")
 
 
-def make_loss(model, examples):
+def make_loss(model, examples, loss_scope: str):
     def loss_fn(hypernet):
         losses = []
         for example in examples:
             generated = hypernet.generate_from_text(example.document)
             apply_dynamic_generated_loras(model, generated)
-            logits, _ = model(example.prompt_ids[None, :])
-            next_token_logits = logits[:, -1, :].astype(mx.float32)
-            target = mx.array([example.target_id], dtype=mx.int32)
-            losses.append(nn.losses.cross_entropy(next_token_logits, target).mean())
+            logits, targets = teacher_forced_response_logits(model, example, loss_scope)
+            losses.append(nn.losses.cross_entropy(logits, targets).mean())
         return mx.mean(mx.stack(losses))
 
     return loss_fn
 
 
-def accuracy(model, hypernet, examples):
+def teacher_forced_response_logits(model, example, loss_scope: str):
+    response_ids = example.response_ids
+    if loss_scope == "first-token":
+        response_ids = response_ids[:1]
+    if len(response_ids) > 1:
+        input_ids = mx.concatenate([example.prompt_ids, response_ids[:-1]], axis=0)
+    else:
+        input_ids = example.prompt_ids
+    logits, _ = model(input_ids[None, :])
+    start = len(example.prompt_ids) - 1
+    end = start + len(response_ids)
+    return logits[0, start:end, :].astype(mx.float32), response_ids.astype(mx.int32)
+
+
+def accuracy(model, hypernet, examples, loss_scope: str):
     correct = 0
     for example in examples:
         generated = hypernet.generate_from_text(example.document)
         apply_dynamic_generated_loras(model, generated)
-        logits, _ = model(example.prompt_ids[None, :])
-        pred = mx.argmax(logits[:, -1, :], axis=-1).item()
-        correct += int(pred == example.target_id)
+        logits, targets = teacher_forced_response_logits(model, example, loss_scope)
+        preds = mx.argmax(logits, axis=-1)
+        correct += int(mx.all(preds == targets).item())
     return correct / len(examples)
+
+
+def token_accuracy(model, hypernet, examples, loss_scope: str):
+    correct = 0
+    total = 0
+    for example in examples:
+        generated = hypernet.generate_from_text(example.document)
+        apply_dynamic_generated_loras(model, generated)
+        logits, targets = teacher_forced_response_logits(model, example, loss_scope)
+        preds = mx.argmax(logits, axis=-1)
+        correct += int(mx.sum(preds == targets).item())
+        total += len(targets)
+    return correct / total if total else 0.0
+
+
+def response_token_count(examples, loss_scope: str):
+    if loss_scope == "first-token":
+        return len(examples)
+    return sum(len(example.response_ids) for example in examples)
 
 
 def main():
@@ -261,12 +298,13 @@ def main():
         scale=20.0,
     )
     examples = build_examples(tokenizer, args)
-    loss_fn = make_loss(model, examples)
+    loss_fn = make_loss(model, examples, args.loss_scope)
     loss_and_grad = nn.value_and_grad(hypernet, loss_fn)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
 
     initial_loss = loss_fn(hypernet).item()
-    initial_acc = accuracy(model, hypernet, examples)
+    initial_acc = accuracy(model, hypernet, examples, args.loss_scope)
+    initial_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
     for step in range(args.iters):
         loss_value, grads = loss_and_grad(hypernet)
         optimizer.update(hypernet, grads)
@@ -275,15 +313,20 @@ def main():
             print(f"iter {step + 1}: loss={loss_value.item():.6f}")
 
     final_loss = loss_fn(hypernet).item()
-    final_acc = accuracy(model, hypernet, examples)
+    final_acc = accuracy(model, hypernet, examples, args.loss_scope)
+    final_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
     improvement = initial_loss / final_loss if final_loss > 0 else math.inf
     print(f"initial_loss={initial_loss:.6f}")
     print(f"final_loss={final_loss:.6f}")
     print(f"improvement={improvement:.2f}x")
     print(f"initial_acc={initial_acc:.3f}")
     print(f"final_acc={final_acc:.3f}")
+    print(f"initial_token_acc={initial_token_acc:.3f}")
+    print(f"final_token_acc={final_token_acc:.3f}")
+    print(f"response_tokens={response_token_count(examples, args.loss_scope)}")
     print(f"target_modules={','.join(target_modules)}")
     print(f"num_specs={len(specs)}")
+    print(f"loss_scope={args.loss_scope}")
 
     if final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")
