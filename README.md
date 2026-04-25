@@ -109,10 +109,10 @@ Interactive Pasal.id-style chat with model and A/B/C/D mode selection:
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat
 ```
 
-Inside chat, use `/suggest` to show example questions, then type a number to run one of them. You can also load suggestions from a text, JSON, or JSONL file:
+Inside chat, use `/suggest` to show corpus-grounded example questions, then type a number to run one of them. By default, chat loads suggestions from `data/pasalid/realcase_eval.jsonl` when available, including its matching source context for B/D modes. You can also load another text, JSON, or JSONL file:
 
 ```bash
-source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --suggestions-file data/pasalid/json_native_expanded_clean_split/test_seen.jsonl
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --suggestions-file data/pasalid/realcase_eval.jsonl
 ```
 
 Useful direct mode for the current clean TinyLlama adapter:
@@ -120,6 +120,31 @@ Useful direct mode for the current clean TinyLlama adapter:
 ```bash
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --preset tinyllama-clean --condition D
 ```
+
+Matrix mode compares answers in one chat session. Compare A/B/C/D for one model:
+
+You can enable it interactively from inside chat with `/matrix`, then return to normal mode with `/single`.
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --preset tinyllama-clean --matrix conditions
+```
+
+Compare the same condition across models:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --matrix models --condition D
+```
+
+Compare selected models and conditions:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat \
+  --matrix all \
+  --matrix-presets tinyllama-clean mistral-q4-long \
+  --matrix-conditions B D
+```
+
+Matrix mode loads each variant sequentially to avoid keeping all models in memory at once.
 
 ## Default Paths
 
