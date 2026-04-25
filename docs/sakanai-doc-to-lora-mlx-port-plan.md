@@ -95,12 +95,15 @@ improvement=1.12x
 To run the same path on the MLX model used by the document-specific baseline:
 
 ```bash
-source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
-  --model mlx_model \
-  --iters 20 \
-  --num-docs 3 \
-  --lora-layers 1 \
-  --max-specs 1
+source ~/.zshrc && scripts/train_doc_to_lora_tinyllama_token_smoke.sh mlx_model 3
+```
+
+The local `mlx_model` smoke has been validated with a minimal configuration:
+
+```text
+initial_loss=13.364178
+final_loss=10.082440
+improvement=1.33x
 ```
 
 If `mlx_model` is not available, convert a Hugging Face model to 4-bit MLX first:

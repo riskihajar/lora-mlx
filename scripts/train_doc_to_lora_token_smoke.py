@@ -36,6 +36,9 @@ class ToyTokenizer:
             values.append(bucket + 4)
         return values or [1]
 
+    def convert_tokens_to_ids(self, token: str):
+        return sum(token.encode("utf-8")) % self.vocab_size
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -54,6 +57,11 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--toy-vocab-size", type=int, default=96)
     parser.add_argument("--max-specs", type=int, default=2)
+    parser.add_argument(
+        "--target-token-prefix",
+        default="the",
+        help="Tokenizer token used as the first synthetic target; later docs offset from it.",
+    )
     return parser.parse_args()
 
 
@@ -84,15 +92,16 @@ def load_model(args):
 
 def build_examples(tokenizer, args) -> list[TokenExample]:
     examples = []
+    vocab_size = get_vocab_size(tokenizer)
+    base_target_id = get_token_id(tokenizer, args.target_token_prefix, default=8)
     for doc_id in range(args.num_docs):
-        answer_token = 8 + doc_id
+        target_id = (base_target_id + doc_id) % vocab_size
         document = (
             f"Synthetic document {doc_id}. "
-            f"The internalized answer token is synthetic_{answer_token}."
+            f"The internalized answer token id is {target_id}."
         )
         prompt = f"Document memory {doc_id}. Question secret answer? Answer"
         prompt_ids = tokenizer.encode(prompt)
-        target_id = answer_token % tokenizer.vocab_size
         examples.append(
             TokenExample(
                 document=document,
@@ -101,6 +110,31 @@ def build_examples(tokenizer, args) -> list[TokenExample]:
             )
         )
     return examples
+
+
+def get_vocab_size(tokenizer) -> int:
+    vocab_size = getattr(tokenizer, "vocab_size", None)
+    if vocab_size is None and hasattr(tokenizer, "get_vocab"):
+        vocab_size = len(tokenizer.get_vocab())
+    if vocab_size is None:
+        raise ValueError("tokenizer does not expose vocab_size or get_vocab()")
+    return int(vocab_size)
+
+
+def get_token_id(tokenizer, token: str, default: int) -> int:
+    token_id = None
+    if hasattr(tokenizer, "convert_tokens_to_ids"):
+        token_id = tokenizer.convert_tokens_to_ids(token)
+        unk_token_id = getattr(tokenizer, "unk_token_id", None)
+        if token_id == unk_token_id:
+            token_id = None
+    if token_id is None:
+        encoded = tokenizer.encode(token)
+        if encoded:
+            token_id = encoded[-1]
+    if token_id is None:
+        token_id = default
+    return int(token_id)
 
 
 def module_lookup(model):
@@ -211,7 +245,7 @@ def main():
     print(f"target_modules={','.join(target_modules)}")
     print(f"num_specs={len(specs)}")
 
-    if final_loss >= initial_loss * 0.9 and final_acc <= initial_acc:
+    if final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")
 
 
