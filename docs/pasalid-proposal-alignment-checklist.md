@@ -200,7 +200,8 @@ Status terbaru QA final:
 | Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `18/30` seen dan `19/30` unseen |
 | Failure audit natural `D` | ✅ | D failure rows: seen `13/30`, unseen `9/30`; targeted transition examples menurunkan failure unseen tetapi belum menyelesaikan answer completeness |
 | Benchmark efisiensi natural QA per-example | ✅ | `20` contoh/split; `D` menambah latency atas `B`, sedangkan `C` prompt pendek tetapi paling lambat |
-| Next action QA | 🟡 | Perbaiki answer completeness dan decoding/format constraint |
+| Format/source constrained natural QA | ✅ | Post-processing constrained membuat valid JSON/citation `1.0` dan menurunkan prompt echo, tetapi tidak menaikkan answer recall; pairwise constrained menjadi seen `13/13/4` dan unseen `B 14`, `D 12`, tie `4` |
+| Next action QA | 🟡 | Perbaiki answer completeness melalui data targeted atau decoding yang memvalidasi isi jawaban, bukan hanya JSON/source |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
@@ -208,7 +209,7 @@ Status terbaru QA final:
 | --- | --- |
 | Internalization | Adapter LoRA menunjukkan internalisasi parsial hanya pada setup tertentu; clean split menunjukkan `C` tidak stabil dan tidak boleh menjadi klaim utama tunggal |
 | Context baseline | Kondisi `B` tetap menjadi upper bound praktis terhadap adapter-only `C`; kondisi `D` diuji terpisah sebagai adapter dengan konteks |
-| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama clean, natural legal QA, dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent dan task-dependent |
+| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama clean, natural legal QA raw, dan Mistral q4 long, tetapi gagal pada Qwen3; setelah format/source constraint diterapkan sama ke `B/D`, keunggulan `D` terutama tersisa pada naturalness sehingga klaim harus model-dependent dan task-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
 | Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
 | Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B/D`, bukan latency; `B` paling efisien untuk retrieval-only, sedangkan `D` menukar latency tambahan dengan source discipline lebih baik. Klaim memory tetap dibatasi karena masih proxy proses |

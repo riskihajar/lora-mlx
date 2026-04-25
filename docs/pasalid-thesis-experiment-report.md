@@ -420,6 +420,49 @@ Makna audit failure cases:
 - Targeted transition examples menurunkan failure unseen dari `16/30` menjadi `9/30` dan membuat `D` unggul pada factual/evidence pairwise unseen, tetapi failure seen naik dari `9/30` menjadi `13/30`.
 - Implikasi teknis berikutnya adalah memperbaiki decoding/format constraint dan menambah data targeted untuk answer completeness agar citation JSON tidak muncul ketika jawaban substantif gagal atau terlalu pendek.
 
+Sebagai tindak lanjut decoding/format constraint, ditambahkan `scripts/postprocess_pasalid_natural_predictions.py`. Script ini tidak mengubah model, tetapi membuat varian constrained dengan cara:
+
+- mengambil `answer` dari JSON jika ada, atau membersihkan teks mentah jika JSON tidak valid;
+- menghapus echo `Referensi:`, `Instruksi:`, atau `Q:` dari jawaban;
+- memaksa output kembali ke schema JSON `answer + source_*` memakai referensi dari prompt sumber.
+
+Evaluator natural juga ditambah metrik pendukung `answer_precision`, `answer_recall`, `short_answer_rate`, `prompt_echo_rate`, dan `instruction_echo_rate` agar failure completeness tidak tertutup oleh F1 saja.
+
+Hasil constrained otomatis:
+
+| Split | Kondisi | Answer F1 | Answer Recall | Citation EM | Valid JSON | Prompt Echo | Instruction Echo |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen | B raw | 0.2720 | 0.3389 | 0.0000 | 0.0000 | 0.1513 | 0.1597 |
+| seen | B constrained | 0.2901 | 0.3223 | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
+| seen | D raw | 0.3098 | 0.2860 | 0.6639 | 0.7479 | 0.0756 | 0.1008 |
+| seen | D constrained | 0.3194 | 0.2823 | 1.0000 | 1.0000 | 0.0168 | 0.0420 |
+| unseen | B raw | 0.3361 | 0.4289 | 0.0000 | 0.0000 | 0.1795 | 0.2564 |
+| unseen | B constrained | 0.3584 | 0.4111 | 1.0000 | 1.0000 | 0.0000 | 0.0256 |
+| unseen | D raw | 0.3244 | 0.3244 | 0.6410 | 0.7436 | 0.0256 | 0.0769 |
+| unseen | D constrained | 0.3254 | 0.3214 | 1.0000 | 1.0000 | 0.0000 | 0.0513 |
+
+Review pairwise constrained `30` contoh per split:
+
+| Split | Metric | B Wins | D Wins | Ties |
+| --- | --- | ---: | ---: | ---: |
+| seen | factual correctness | 10 | 6 | 14 |
+| seen | evidence support | 11 | 6 | 13 |
+| seen | source traceability | 0 | 0 | 30 |
+| seen | naturalness | 5 | 14 | 11 |
+| seen | overall | 13 | 13 | 4 |
+| unseen | factual correctness | 9 | 4 | 17 |
+| unseen | evidence support | 8 | 4 | 18 |
+| unseen | source traceability | 3 | 0 | 27 |
+| unseen | naturalness | 9 | 14 | 7 |
+| unseen | overall | 14 | 12 | 4 |
+
+Makna constrained run:
+
+- Constraint efektif untuk format: valid JSON dan citation EM menjadi `1.0` pada metrik otomatis karena source dipaksa dari prompt.
+- Constraint mengurangi prompt/instruction echo, tetapi tidak menaikkan recall jawaban; ini menunjukkan failure completeness adalah masalah substansi generatif, bukan hanya parsing output.
+- Setelah `B` dan `D` sama-sama diberi format/source constraint, keunggulan source traceability `D` hilang secara desain; `D` masih lebih natural, tetapi factual/evidence tidak lagi unggul.
+- Karena itu, klaim final perlu memisahkan tiga hal: raw model behavior (`D` lebih disiplin sumber daripada `B`), constrained system behavior (format bisa dipaksa untuk semua kondisi context), dan answer completeness (masih membutuhkan data/decoding tambahan).
+
 Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
 
 Benchmark natural legal QA final juga dijalankan dengan preset `tinyllama_natural_legal`, split `data/pasalid/natural_legal_split/`, `20` contoh per split, mode `--per-example`, dan `--max-new-tokens 96`.

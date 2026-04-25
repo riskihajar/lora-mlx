@@ -119,6 +119,15 @@ source ~/.zshrc && PYTHONPATH=src python3 scripts/summarize_pasalid_pairwise_rev
 source ~/.zshrc && PYTHONPATH=src python3 scripts/summarize_pasalid_pairwise_review.py --input outputs/reviews/pasalid_natural_legal/unseen_B_vs_D_pairwise_review.jsonl --output outputs/reviews/pasalid_natural_legal/unseen_B_vs_D_pairwise_summary.json
 ```
 
+Post-process constrained JSON/source untuk menguji dampak format constraint tanpa retraining:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/postprocess_pasalid_natural_predictions.py --input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_B_base_with_context.jsonl --output outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_B_base_with_context_constrained.jsonl
+source ~/.zshrc && PYTHONPATH=src python3 scripts/postprocess_pasalid_natural_predictions.py --input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_D_adapter_with_context.jsonl --output outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_D_adapter_with_context_constrained.jsonl
+source ~/.zshrc && PYTHONPATH=src python3 scripts/postprocess_pasalid_natural_predictions.py --input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_B_base_with_context.jsonl --output outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_B_base_with_context_constrained.jsonl
+source ~/.zshrc && PYTHONPATH=src python3 scripts/postprocess_pasalid_natural_predictions.py --input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_D_adapter_with_context.jsonl --output outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_D_adapter_with_context_constrained.jsonl
+```
+
 ## Hasil Final Saat Ini
 
 Dataset final LLM-assisted filtered:
@@ -160,6 +169,24 @@ Benchmark efisiensi per-example `20` contoh per split, `--max-new-tokens 96`:
 | unseen | D | 260.4 | 7.6658 | 10.2440 | 9.2619 |
 
 Interpretasi efisiensi: `B` adalah baseline retrieval-only paling efisien, `C` mengurangi prompt token tetapi paling lambat karena biaya adapter inference, dan `D` menukar latency tambahan dengan source discipline serta naturalness yang lebih baik.
+
+Hasil constrained JSON/source:
+
+| Split | Kondisi | Answer F1 | Answer Recall | Citation EM | Valid JSON | Prompt Echo |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seen | B constrained | 0.2901 | 0.3223 | 1.0000 | 1.0000 | 0.0000 |
+| seen | D constrained | 0.3194 | 0.2823 | 1.0000 | 1.0000 | 0.0168 |
+| unseen | B constrained | 0.3584 | 0.4111 | 1.0000 | 1.0000 | 0.0000 |
+| unseen | D constrained | 0.3254 | 0.3214 | 1.0000 | 1.0000 | 0.0000 |
+
+Review pairwise constrained `30` contoh per split:
+
+| Split | Overall B Wins | D Wins | Ties | Catatan |
+| --- | ---: | ---: | ---: | --- |
+| seen | 13 | 13 | 4 | `D` unggul naturalness, `B` unggul factual/evidence |
+| unseen | 14 | 12 | 4 | `B` sedikit unggul setelah source/JSON dipaksa sama-sama rapi |
+
+Interpretasi constrained: format/source constraint menyelesaikan JSON, citation, dan prompt echo, tetapi tidak menyelesaikan answer completeness. Setelah constraint yang sama diterapkan ke `B` dan `D`, kontribusi `D` paling jelas tersisa pada naturalness, bukan factual/evidence.
 
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 
