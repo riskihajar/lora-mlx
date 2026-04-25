@@ -389,36 +389,37 @@ Makna review pairwise natural legal QA:
 - `D` lebih traceable dan lebih natural, tetapi masih sering mendapat label `factually-wrong` atau `unsupported-answer`; ini menunjukkan adapter natural legal perlu perbaikan substansi, bukan hanya format.
 - Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff yang lebih kuat: LoRA + context memperbaiki answer F1, traceability, naturalness, dan copy-rate pada run targeted-completeness, tetapi factual correctness pada held-out law masih tidak dominan secara pairwise.
 
-Audit targeted kemudian dilakukan pada failure cases `D` yang mendapat label `factually-wrong` atau `unsupported-answer` dalam pairwise review.
+Audit targeted kemudian dilakukan pada failure cases `D` dari pairwise review. Setelah targeted-completeness, audit ini dibuat reproducible dengan `scripts/summarize_pasalid_failure_audit.py`, yang membaca label review dan reason untuk mengelompokkan sisa failure.
 
 Ringkasan jumlah failure `D`:
 
-| Split | Reviewed Rows | D Failure Rows | Catatan |
-| --- | ---: | ---: | --- |
-| seen | 30 | 13 | Failure naik setelah targeted augmentation; mayoritas berupa jawaban terlalu pendek, malformed source, dan semantic drift |
-| unseen | 30 | 9 | Failure turun dari run sebelumnya; error negasi/peralihan tidak lagi dominan pada sample review |
+| Split | Reviewed Rows | Broad Failure Rows | Strict Failure Rows | Strict Failure Rate |
+| --- | ---: | ---: | ---: | ---: |
+| seen | 30 | 24 | 18 | 0.6000 |
+| unseen | 30 | 23 | 16 | 0.5333 |
+
+`Broad failure` mencakup skor factual/evidence kurang dari `2` atau label error kuat. `Strict failure` hanya menghitung label `factually-wrong`, `unsupported-answer`, `source-wrong`, atau `source-missing`.
 
 Kategori error utama `D` dari audit targeted:
 
 | Kategori | Seen | Unseen | Pola |
 | --- | ---: | ---: | --- |
-| semantic drift / unsupported | 3 | 3 | Jawaban tidak menjawab inti pertanyaan walau citation sering benar |
-| question echo | 1 | 0 | Model mengulang pertanyaan sebagai isi `answer` |
-| too short / incomplete | 5 | 3 | Jawaban hanya fragmen angka, tanggal, atau satu item |
-| wrong or malformed source/JSON | 3 | 1 | Citation salah schema atau salah nomor sumber |
-| extractive list / copy error | 1 | 2 | Model menyalin daftar pasal tetapi kehilangan item atau format JSON |
-| wrong polarity / negation | 0 | 0 | Targeted transition examples mengurangi error negasi pada sample review ini |
-| entity type confusion | 0 | 0 | Tidak muncul pada sample targeted review ini |
+| substantive factual/evidence error | 11 | 12 | Jawaban masih salah atau unsupported pada sebagian query walau F1 naik |
+| entity/count/list confusion | 12 | 14 | Pertanyaan provinsi asal, jumlah kecamatan, Lembaran Negara, dan daftar wilayah masih rentan |
+| incomplete or wrong focus | 12 | 13 | Model menjawab tanggal saat ditanya provinsi, atau tidak menyebut detail kunci seperti nomor Lembaran Negara |
+| source/format error | 13 | 12 | JSON/source raw masih kadang hilang/salah meskipun constrained post-process bisa memperbaikinya |
+| too extractive | 12 | 15 | Jawaban masih sering menyalin frasa dokumen atau daftar mentah |
+| prompt/instruction echo or unnatural | 13 | 10 | Masih ada echo instruksi/referensi dan kalimat janggal |
+| polarity/transition confusion | 4 | 0 | Error peralihan/repeal jauh berkurang pada unseen, tetapi masih muncul pada seen sample |
 
 Makna audit failure cases:
 
-- Banyak kegagalan `D` adalah error substansi nyata, bukan hanya perbedaan parafrase dengan gold answer.
-- `D` sering mampu mempertahankan citation JSON yang benar meskipun isi `answer` salah; citation correctness dan factual correctness perlu dilaporkan terpisah.
-- Pada pertanyaan daftar wilayah dan status administratif, model rentan salah hitung, menghilangkan item, atau tertukar jenis entitas.
-- Pada pertanyaan peralihan aturan, model rentan membalik negasi seperti "masih berlaku" vs "dicabut/tidak berlaku".
-- Residual OCR/report-like berhasil dihapus dari dataset regenerated (`report-like rows = 0`), tetapi `D` masih dapat gagal karena jawaban terlalu pendek atau semantic drift.
-- Targeted transition examples menurunkan failure unseen dari `16/30` menjadi `9/30` dan membuat `D` unggul pada factual/evidence pairwise unseen, tetapi failure seen naik dari `9/30` menjadi `13/30`.
-- Implikasi teknis berikutnya adalah memperbaiki decoding/format constraint dan menambah data targeted untuk answer completeness agar citation JSON tidak muncul ketika jawaban substantif gagal atau terlalu pendek.
+- Targeted-completeness menaikkan F1 dan membuat `D` unggul overall, tetapi strict failure masih tinggi sehingga hasil tidak boleh dibaca sebagai solved legal QA.
+- Banyak kegagalan `D` tetap error substansi nyata, bukan sekadar perbedaan parafrase dengan gold answer.
+- Source/citation dan factual correctness harus dilaporkan terpisah: source dapat diperbaiki dengan constraint, sedangkan isi jawaban belum otomatis benar.
+- Pertanyaan held-out law yang melibatkan provinsi asal pembentukan, angka kecamatan, Lembaran Negara, dan daftar wilayah masih menjadi residual bottleneck.
+- Error transition/repeal lebih terkendali dibanding audit sebelumnya, terutama pada unseen split.
+- Next action teknis paling relevan adalah validasi isi jawaban berbasis extraction/checker untuk angka, provinsi, dan status repeal, bukan hanya menambah post-processing JSON/source.
 
 Sebagai tindak lanjut decoding/format constraint, ditambahkan `scripts/postprocess_pasalid_natural_predictions.py`. Script ini tidak mengubah model, tetapi membuat varian constrained dengan cara:
 

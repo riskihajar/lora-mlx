@@ -189,6 +189,22 @@ Review pairwise constrained `30` contoh per split:
 
 Interpretasi constrained: format/source constraint menyelesaikan JSON, citation, dan prompt echo, tetapi tidak otomatis menaikkan recall. Setelah targeted completeness, `D` tetap unggul F1 atas `B` pada constrained seen/unseen, sementara pairwise constrained menjadi lebih seimbang.
 
+Audit failure terbaru dapat direplikasi dengan:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/summarize_pasalid_failure_audit.py --input outputs/reviews/pasalid_natural_legal/seen_B_vs_D_pairwise_review.jsonl --output outputs/reviews/pasalid_natural_legal/seen_D_failure_audit_summary.json --model-key D
+source ~/.zshrc && PYTHONPATH=src python3 scripts/summarize_pasalid_failure_audit.py --input outputs/reviews/pasalid_natural_legal/unseen_B_vs_D_pairwise_review.jsonl --output outputs/reviews/pasalid_natural_legal/unseen_D_failure_audit_summary.json --model-key D
+```
+
+Ringkasan residual failure `D`:
+
+| Split | Broad Failures | Strict Failures | Dominant Residual Pattern |
+| --- | ---: | ---: | --- |
+| seen | 24/30 | 18/30 | entity/count/list, source/format, incomplete focus |
+| unseen | 23/30 | 16/30 | entity/count/list, extractive output, incomplete focus |
+
+Interpretasi audit: targeted completeness memperbaiki skor agregat, tetapi sisa bottleneck masih berada pada validasi isi jawaban untuk angka, provinsi asal, Lembaran Negara, daftar wilayah, dan status repeal.
+
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 
 Eksperimen natural legal QA layak menjadi hasil utama jika:
