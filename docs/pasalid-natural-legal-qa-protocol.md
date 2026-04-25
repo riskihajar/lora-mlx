@@ -130,30 +130,31 @@ source ~/.zshrc && PYTHONPATH=src python3 scripts/postprocess_pasalid_natural_pr
 
 ## Hasil Final Saat Ini
 
-Dataset final LLM-assisted filtered:
+Dataset final LLM-assisted filtered dengan targeted completeness:
 
 | Item | Nilai |
 | --- | ---: |
-| total rows | 535 |
-| train rows | 338 |
-| valid rows | 39 |
-| test seen rows | 119 |
-| test unseen rows | 39 |
+| total rows | 538 |
+| train rows | 340 |
+| valid rows | 38 |
+| test seen rows | 122 |
+| test unseen rows | 38 |
 | laws | 17 |
+| targeted completeness/transition rows | 154 |
 
 Hasil otomatis TinyLlama natural legal:
 
 | Split | B F1 | D F1 | D - B | D Citation EM | D Copy >10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| seen | 0.2720 | 0.3098 | +0.0378 | 0.6639 | 0.1681 |
-| unseen | 0.3361 | 0.3244 | -0.0117 | 0.6410 | 0.3333 |
+| seen | 0.2707 | 0.3341 | +0.0634 | 0.5738 | 0.2459 |
+| unseen | 0.2902 | 0.3432 | +0.0530 | 0.6579 | 0.1842 |
 
 Review pairwise `30` contoh per split:
 
 | Split | Overall B Wins | D Wins | Ties |
 | --- | ---: | ---: | ---: |
-| seen | 8 | 18 | 4 |
-| unseen | 10 | 19 | 1 |
+| seen | 10 | 17 | 3 |
+| unseen | 8 | 16 | 6 |
 
 Benchmark efisiensi per-example `20` contoh per split, `--max-new-tokens 96`:
 
@@ -174,19 +175,19 @@ Hasil constrained JSON/source:
 
 | Split | Kondisi | Answer F1 | Answer Recall | Citation EM | Valid JSON | Prompt Echo |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| seen | B constrained | 0.2901 | 0.3223 | 1.0000 | 1.0000 | 0.0000 |
-| seen | D constrained | 0.3194 | 0.2823 | 1.0000 | 1.0000 | 0.0168 |
-| unseen | B constrained | 0.3584 | 0.4111 | 1.0000 | 1.0000 | 0.0000 |
-| unseen | D constrained | 0.3254 | 0.3214 | 1.0000 | 1.0000 | 0.0000 |
+| seen | B constrained | 0.2791 | 0.2790 | 1.0000 | 1.0000 | 0.0000 |
+| seen | D constrained | 0.3256 | 0.2994 | 1.0000 | 1.0000 | 0.0082 |
+| unseen | B constrained | 0.2936 | 0.2860 | 1.0000 | 1.0000 | 0.0000 |
+| unseen | D constrained | 0.3379 | 0.3054 | 1.0000 | 1.0000 | 0.0000 |
 
 Review pairwise constrained `30` contoh per split:
 
 | Split | Overall B Wins | D Wins | Ties | Catatan |
 | --- | ---: | ---: | ---: | --- |
-| seen | 13 | 13 | 4 | `D` unggul naturalness, `B` unggul factual/evidence |
-| unseen | 14 | 12 | 4 | `B` sedikit unggul setelah source/JSON dipaksa sama-sama rapi |
+| seen | 12 | 11 | 7 | Hampir tie setelah source/JSON dipaksa sama-sama rapi |
+| unseen | 11 | 13 | 6 | `D` unggul tipis dan tetap lebih rendah copy-rate |
 
-Interpretasi constrained: format/source constraint menyelesaikan JSON, citation, dan prompt echo, tetapi tidak menyelesaikan answer completeness. Setelah constraint yang sama diterapkan ke `B` dan `D`, kontribusi `D` paling jelas tersisa pada naturalness, bukan factual/evidence.
+Interpretasi constrained: format/source constraint menyelesaikan JSON, citation, dan prompt echo, tetapi tidak otomatis menaikkan recall. Setelah targeted completeness, `D` tetap unggul F1 atas `B` pada constrained seen/unseen, sementara pairwise constrained menjadi lebih seimbang.
 
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 

@@ -4,7 +4,7 @@ import argparse
 import json
 import random
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from lora_mlx.paths import DEFAULT_DATA_DIR
@@ -135,6 +135,15 @@ def title_subject(row: dict) -> str:
     return normalize_space(row.get("short_title") or row.get("title") or "ketentuan ini")
 
 
+def short_entity(row: dict) -> str:
+    subject = title_subject(row)
+    return normalize_space(subject.split(" di Provinsi ", 1)[0])
+
+
+def normalize_count(raw: str) -> str:
+    return raw.strip().replace("l", "1").replace("I", "1")
+
+
 def fallback_examples(row: dict) -> list[tuple[str, str]]:
     source_doc = normalize_space(row.get("source_doc", ""))
     lowered = source_doc.lower()
@@ -215,6 +224,100 @@ def targeted_transition_examples(row: dict) -> list[tuple[str, str]]:
     return examples
 
 
+def targeted_completeness_examples(row: dict) -> list[tuple[str, str]]:
+    source_doc = normalize_space(row.get("source_doc", ""))
+    lowered = source_doc.lower()
+    reference = row.get("source_reference", "sumber hukum terkait")
+    subject = short_entity(row)
+    examples = []
+
+    count_match = re.search(r"terdiri atas\s+([0-9Il]+)\s*\(([^)]+)\)\s+Kecamatan", source_doc, flags=re.IGNORECASE)
+    if count_match:
+        count = normalize_count(count_match.group(1))
+        count_words = normalize_space(count_match.group(2))
+        examples.extend(
+            [
+                (
+                    f"{subject} terbagi menjadi berapa kecamatan menurut aturan ini?",
+                    f"Menurut {reference}, {subject} terdiri atas {count} kecamatan atau {count_words} kecamatan.",
+                ),
+                (
+                    f"Kalau ditanya jumlah kecamatan di {subject}, jawabannya berapa?",
+                    f"Jumlahnya adalah {count} kecamatan. Angka itu ditulis dalam aturan sebagai {count_words} kecamatan berdasarkan {reference}.",
+                ),
+            ]
+        )
+
+    province_match = re.search(r"(Kabupaten|Kota)\s+([^.;]+?)\s+adalah\s+(?:daerah\s+)?(?:kabupaten|kota|bagian dari wilayah Negara Kesatuan)\s+yang\s+berada\s+di\s+wilayah\s+Provinsi\s+([^.;]+?)(?:\s+yang|\.|$)", source_doc, flags=re.IGNORECASE)
+    if province_match:
+        entity_type = province_match.group(1)
+        entity_name = normalize_space(province_match.group(2))
+        province = normalize_space(province_match.group(3))
+        entity = f"{entity_type} {entity_name}"
+        examples.extend(
+            [
+                (
+                    f"{entity} secara hukum masuk wilayah provinsi mana?",
+                    f"{entity} disebut sebagai daerah yang berada di wilayah Provinsi {province}. Rujukannya adalah {reference}.",
+                ),
+                (
+                    f"Dalam aturan ini, {entity} disebut sebagai daerah seperti apa?",
+                    f"Aturan ini menyebut {entity} sebagai daerah {entity_type.lower()} yang berada di wilayah Provinsi {province}, sebagaimana tercantum dalam {reference}.",
+                ),
+            ]
+        )
+
+    formation_source = source_doc
+    subject_index = source_doc.lower().find(subject.lower())
+    if subject_index != -1:
+        formation_source = source_doc[subject_index:]
+    formation_env_match = re.search(r"berdasarkan\s+Undang-undang\s+Nomor\s+([0-9Il]+)\s+Tahun\s+(\d{4}).*?dalam\s+lingkungan\s+Daerah\s+Propinsi\s+([^(.]+)", formation_source, flags=re.IGNORECASE)
+    if formation_env_match:
+        law_number = normalize_count(formation_env_match.group(1))
+        law_year = formation_env_match.group(2)
+        old_province = normalize_space(formation_env_match.group(3))
+        examples.extend(
+            [
+                (
+                    f"Waktu pertama kali dibentuk, {subject} masuk lingkungan provinsi apa?",
+                    f"Pada dasar pembentukannya, {subject} berada dalam lingkungan Daerah Propinsi {old_province}. Dasarnya merujuk pada Undang-Undang Nomor {law_number} Tahun {law_year} sebagaimana disebut dalam {reference}.",
+                ),
+                (
+                    f"Dasar hukum awal pembentukan {subject} itu undang-undang yang mana?",
+                    f"Dasar awal pembentukannya adalah Undang-Undang Nomor {law_number} Tahun {law_year}. Keterangan itu tercantum dalam {reference}.",
+                ),
+            ]
+        )
+
+    gazette_match = re.search(r"Lembaran(?:-Negara| Negara)?(?:\s+Tahun\s+(\d{4}))?\s+Nomor\s+([0-9Il]+)(?:\s+Tahun\s+(\d{4}))?", source_doc, flags=re.IGNORECASE)
+    if gazette_match:
+        year = gazette_match.group(1) or gazette_match.group(3) or ""
+        number = normalize_count(gazette_match.group(2))
+        gazette = f"Lembaran Negara Nomor {number}" + (f" Tahun {year}" if year else "")
+        examples.append(
+            (
+                f"Ada rujukan Lembaran Negara untuk pembentukan {subject}?",
+                f"Ada. Rujukannya adalah {gazette}, sebagaimana disebut dalam {reference}.",
+            )
+        )
+
+    if "susunan dan tata cara penyelenggaraan pemerintahan daerah" in lowered and "peraturan perundang-undangan" in lowered:
+        examples.extend(
+            [
+                (
+                    "Siapa yang mengatur susunan dan tata cara penyelenggaraan pemerintahan daerah?",
+                    f"Pasal ini tidak menunjuk satu lembaga tertentu. Susunan dan tata cara penyelenggaraan pemerintahan daerah mengikuti ketentuan peraturan perundang-undangan, sesuai {reference}.",
+                ),
+                (
+                    "Apakah aturan ini menjelaskan sendiri bentuk susunan pemerintahan daerah?",
+                    f"Tidak secara rinci. Ketentuannya menyerahkan susunan dan tata cara penyelenggaraan pemerintahan daerah pada peraturan perundang-undangan yang berlaku, sebagaimana disebut dalam {reference}.",
+                ),
+            ]
+        )
+
+    return examples
+
+
 def llm_examples(row: dict, questions_per_doc: int) -> list[tuple[str, str]]:
     from lora_mlx.openai_compat import generate_text
 
@@ -261,13 +364,16 @@ def llm_examples(row: dict, questions_per_doc: int) -> list[tuple[str, str]]:
 def build_rows(docs: list[dict], limit: int, questions_per_doc: int, use_llm: bool, max_copy_run: int) -> list[dict]:
     rows = []
     seen = set()
-    generation = "llm_natural_paraphrase" if use_llm else "heuristic_natural_bootstrap"
+    generated_label = "llm_natural_paraphrase" if use_llm else "heuristic_natural_bootstrap"
     for doc in docs:
-        targeted = targeted_transition_examples(doc)
+        targeted = targeted_transition_examples(doc) + targeted_completeness_examples(doc)
         remaining = max(0, questions_per_doc - len(targeted))
         generated = llm_examples(doc, remaining) if use_llm and remaining else fallback_examples(doc)
-        examples = (targeted + generated)[:questions_per_doc]
-        for question, answer in examples:
+        examples = (
+            [(question, answer, "targeted_completeness_and_transition") for question, answer in targeted]
+            + [(question, answer, generated_label) for question, answer in generated]
+        )[:questions_per_doc]
+        for question, answer, generation in examples:
             key = (question, doc.get("source_reference", ""))
             if key in seen:
                 continue
@@ -351,6 +457,9 @@ def write_outputs(rows: list[dict], output: Path, split_dir: Path, seed: int) ->
         "laws": len({row["law_id"] for row in rows}),
         "answer_style": "natural_paraphrase_with_structured_citation",
         "avg_max_source_copy_run": sum(row["max_source_copy_run"] for row in rows) / len(rows),
+        "rows_on_completeness_patterns": sum(1 for row in rows if targeted_completeness_examples(row)),
+        "rows_on_transition_patterns": sum(1 for row in rows if targeted_transition_examples(row)),
+        "source_generation_counts": dict(sorted(Counter(row["source_generation"] for row in rows).items())),
         "splits": {name: len(split_rows) for name, split_rows in splits.items()},
     }
     (split_dir / "split_manifest.json").write_text(json.dumps(manifest, ensure_ascii=True, indent=2) + "\n")

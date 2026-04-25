@@ -298,23 +298,23 @@ Interpretasi real-case eval:
 
 ### Natural legal QA LLM-assisted
 
-Untuk mengurangi ketergantungan pada pertanyaan template dan jawaban extractive, dibuat dataset natural legal QA dengan `scripts/build_pasalid_natural_legal_qa.py --use-llm`. Generator menghasilkan pertanyaan user-style dan jawaban parafrase natural, tetapi tetap menyimpan citation terstruktur dan source reference dari `doc_units`. Builder kemudian diberi filter tambahan untuk mengecualikan unit laporan keuangan/report-like yang lebih cocok untuk table/numeric QA daripada legal QA normatif. Split juga dibuat agar held-out law tidak dipilih dari law dengan jumlah row terlalu kecil. Setelah failure audit, builder diperketat lagi untuk menghapus residual APBN/report-like dan menambahkan contoh targeted untuk pasal peralihan/repeal.
+Untuk mengurangi ketergantungan pada pertanyaan template dan jawaban extractive, dibuat dataset natural legal QA dengan `scripts/build_pasalid_natural_legal_qa.py --use-llm`. Generator menghasilkan pertanyaan user-style dan jawaban parafrase natural, tetapi tetap menyimpan citation terstruktur dan source reference dari `doc_units`. Builder kemudian diberi filter tambahan untuk mengecualikan unit laporan keuangan/report-like yang lebih cocok untuk table/numeric QA daripada legal QA normatif. Split juga dibuat agar held-out law tidak dipilih dari law dengan jumlah row terlalu kecil. Setelah failure audit, builder diperketat lagi untuk menghapus residual APBN/report-like dan menambahkan contoh targeted untuk pasal peralihan/repeal, jumlah kecamatan, provinsi/wilayah hukum, dasar pembentukan, Lembaran Negara, dan pasal pemerintahan daerah yang hanya merujuk peraturan perundang-undangan.
 
 Ringkasan dataset:
 
 | Item | Nilai |
 | --- | ---: |
-| total rows | 535 |
+| total rows | 538 |
 | laws | 17 |
-| train rows | 338 |
-| valid rows | 39 |
-| test seen rows | 119 |
-| test unseen rows | 39 |
+| train rows | 340 |
+| valid rows | 38 |
+| test seen rows | 122 |
+| test unseen rows | 38 |
 | answer style | natural paraphrase with structured citation |
-| avg max source copy run | 3.9009 |
+| avg max source copy run | 4.2937 |
 | max source copy run | 10 |
 | report-like rows | 0 |
-| targeted transition rows | 42 |
+| targeted completeness/transition rows | 154 |
 
 Artefak lokal:
 
@@ -324,29 +324,29 @@ Artefak lokal:
 - adapter: `outputs/adapters/adapters_pasalid_tinyllama_natural_legal.npz`
 - prediction export: `outputs/predictions/pasalid_natural_legal/`
 
-Training TinyLlama natural legal pada dataset final targeted selesai sampai `1000` iterasi. Validation loss turun dari `2.122` pada iterasi awal menjadi `1.073` pada iterasi `1000`.
+Training TinyLlama natural legal pada dataset final targeted-completeness selesai sampai `1000` iterasi. Validation loss turun dari `2.111` pada iterasi awal menjadi `1.060` pada iterasi `1000`.
 
 Hasil otomatis `A/B/C/D`:
 
 | Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | D Citation EM | D Citation Component |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| seen (`119`) | 0.1828 | 0.2720 | 0.2065 | 0.3098 | +0.0237 | +0.0378 | 0.6639 | 0.6870 |
-| unseen (`39`) | 0.2302 | 0.3361 | 0.2381 | 0.3244 | +0.0078 | -0.0117 | 0.6410 | 0.6859 |
+| seen (`122`) | 0.1938 | 0.2707 | 0.2241 | 0.3341 | +0.0303 | +0.0634 | 0.5738 | 0.5840 |
+| unseen (`38`) | 0.1948 | 0.2902 | 0.2266 | 0.3432 | +0.0319 | +0.0530 | 0.6579 | 0.6579 |
 
 Copy dan format metrics:
 
 | Split | Kondisi | Valid JSON | Avg Copy Run | Source 4-gram Copy Ratio | Copy Run >10 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| seen | B | 0.0000 | 11.5966 | 0.2683 | 0.3361 |
-| seen | D | 0.7479 | 7.3866 | 0.2466 | 0.1681 |
-| unseen | B | 0.0000 | 15.8974 | 0.3790 | 0.5385 |
-| unseen | D | 0.7436 | 12.1282 | 0.4054 | 0.3333 |
+| seen | B | 0.0000 | 10.3770 | 0.2582 | 0.3443 |
+| seen | D | 0.6066 | 8.5984 | 0.2571 | 0.2459 |
+| unseen | B | 0.0000 | 12.7632 | 0.2608 | 0.3158 |
+| unseen | D | 0.6842 | 8.2895 | 0.2901 | 0.1842 |
 
 Interpretasi natural legal QA:
 
-- Dataset final targeted ini memenuhi target ukuran minimum praktis: train di atas `300` dan test gabungan `158` contoh.
-- `D` menjadi kondisi terbaik pada seen split untuk answer F1, citation, valid JSON, dan copy-rate.
-- Pada unseen split, `D` masih sedikit di bawah `B` pada answer F1, tetapi jauh lebih baik pada citation/valid JSON serta lebih rendah pada copy-run berlebihan.
+- Dataset final targeted-completeness ini memenuhi target ukuran minimum praktis: train di atas `300` dan test gabungan `160` contoh.
+- `D` menjadi kondisi terbaik pada seen dan unseen split untuk answer F1, serta tetap jauh lebih baik daripada `B` pada citation/valid JSON.
+- Targeted completeness examples membalik hasil unseen dari `D-B -0.0117` menjadi `D-B +0.0530`, tetapi valid JSON raw `D` turun dibanding run sebelumnya sehingga format constraint tetap relevan.
 - `C` tidak memberi manfaat stabil; nilainya hanya mendekati `A` dan jauh di bawah `B/D`, sehingga adapter-only inference tetap tidak layak menjadi kontribusi utama.
 - Hasil natural legal QA memperkuat bahwa kontribusi LoRA lebih tepat ditulis sebagai peningkatan disiplin penggunaan konteks/source pada kondisi `D`, bukan sebagai peningkatan answer F1 universal pada semua split.
 - Sebelum hasil ini dijadikan klaim final, hasil review LLM perlu dilengkapi audit manual pada contoh gagal untuk membedakan error substansi nyata dari perbedaan parafrase atau format.
@@ -357,37 +357,37 @@ Ringkasan skor rata-rata pairwise:
 
 | Split | Metric | B Avg | D Avg | D - B |
 | --- | --- | ---: | ---: | ---: |
-| seen | factual correctness | 0.9000 | 0.7667 | -0.1333 |
-| seen | evidence support | 1.0000 | 0.8333 | -0.1667 |
-| seen | source traceability | 0.0000 | 1.1333 | +1.1333 |
-| seen | naturalness | 0.5667 | 1.1000 | +0.5333 |
-| unseen | factual correctness | 1.1000 | 1.1333 | +0.0333 |
-| unseen | evidence support | 1.1000 | 1.2000 | +0.1000 |
-| unseen | source traceability | 0.0333 | 1.2000 | +1.1667 |
-| unseen | naturalness | 0.6667 | 1.0333 | +0.3667 |
+| seen | factual correctness | 0.8333 | 0.9667 | +0.1333 |
+| seen | evidence support | 0.8333 | 1.0333 | +0.2000 |
+| seen | source traceability | 0.0333 | 1.2000 | +1.1667 |
+| seen | naturalness | 0.8667 | 1.0000 | +0.1333 |
+| unseen | factual correctness | 0.9667 | 0.9333 | -0.0333 |
+| unseen | evidence support | 1.0000 | 1.0667 | +0.0667 |
+| unseen | source traceability | 0.0000 | 1.1667 | +1.1667 |
+| unseen | naturalness | 0.7333 | 1.0333 | +0.3000 |
 
 Winner count pairwise:
 
 | Split | Metric | B Wins | D Wins | Ties |
 | --- | --- | ---: | ---: | ---: |
-| seen | factual correctness | 9 | 6 | 15 |
-| seen | evidence support | 9 | 6 | 15 |
-| seen | source traceability | 0 | 18 | 12 |
-| seen | naturalness | 3 | 17 | 10 |
-| seen | overall | 8 | 18 | 4 |
-| unseen | factual correctness | 5 | 6 | 19 |
-| unseen | evidence support | 5 | 7 | 18 |
+| seen | factual correctness | 7 | 10 | 13 |
+| seen | evidence support | 6 | 11 | 13 |
+| seen | source traceability | 0 | 19 | 11 |
+| seen | naturalness | 8 | 12 | 10 |
+| seen | overall | 10 | 17 | 3 |
+| unseen | factual correctness | 9 | 9 | 12 |
+| unseen | evidence support | 6 | 8 | 16 |
 | unseen | source traceability | 0 | 18 | 12 |
-| unseen | naturalness | 7 | 15 | 8 |
-| unseen | overall | 10 | 19 | 1 |
+| unseen | naturalness | 5 | 13 | 12 |
+| unseen | overall | 8 | 16 | 6 |
 
 Makna review pairwise natural legal QA:
 
-- Pada seen, `D` tetap unggul overall karena source traceability dan naturalness jauh lebih baik, walaupun factual/evidence pairwise sedikit memihak `B`.
-- Pada unseen, targeted transition augmentation memperbaiki review pairwise: `D` sedikit unggul pada factual/evidence, dan tetap jauh lebih kuat pada source traceability serta naturalness.
+- Pada seen, `D` unggul overall dan juga membaik pada factual/evidence setelah targeted completeness examples ditambahkan.
+- Pada unseen, factual correctness menjadi tie secara winner count dan evidence support sedikit memihak `D`; `D` tetap jauh lebih kuat pada source traceability dan naturalness.
 - `B` hampir selalu dinilai `source-missing` dan sering `too-extractive`, sehingga F1 tinggi tidak otomatis berarti jawaban siap dipakai sebagai legal QA akuntabel.
 - `D` lebih traceable dan lebih natural, tetapi masih sering mendapat label `factually-wrong` atau `unsupported-answer`; ini menunjukkan adapter natural legal perlu perbaikan substansi, bukan hanya format.
-- Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff: LoRA + context memperbaiki traceability/naturalness dan menurunkan extractiveness, sementara peningkatan factual/evidence sudah terlihat pada seen tetapi belum konsisten pada held-out law.
+- Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff yang lebih kuat: LoRA + context memperbaiki answer F1, traceability, naturalness, dan copy-rate pada run targeted-completeness, tetapi factual correctness pada held-out law masih tidak dominan secara pairwise.
 
 Audit targeted kemudian dilakukan pada failure cases `D` yang mendapat label `factually-wrong` atau `unsupported-answer` dalam pairwise review.
 
@@ -432,35 +432,35 @@ Hasil constrained otomatis:
 
 | Split | Kondisi | Answer F1 | Answer Recall | Citation EM | Valid JSON | Prompt Echo | Instruction Echo |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| seen | B raw | 0.2720 | 0.3389 | 0.0000 | 0.0000 | 0.1513 | 0.1597 |
-| seen | B constrained | 0.2901 | 0.3223 | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
-| seen | D raw | 0.3098 | 0.2860 | 0.6639 | 0.7479 | 0.0756 | 0.1008 |
-| seen | D constrained | 0.3194 | 0.2823 | 1.0000 | 1.0000 | 0.0168 | 0.0420 |
-| unseen | B raw | 0.3361 | 0.4289 | 0.0000 | 0.0000 | 0.1795 | 0.2564 |
-| unseen | B constrained | 0.3584 | 0.4111 | 1.0000 | 1.0000 | 0.0000 | 0.0256 |
-| unseen | D raw | 0.3244 | 0.3244 | 0.6410 | 0.7436 | 0.0256 | 0.0769 |
-| unseen | D constrained | 0.3254 | 0.3214 | 1.0000 | 1.0000 | 0.0000 | 0.0513 |
+| seen | B raw | 0.2707 | 0.3010 | 0.0000 | 0.0000 | 0.1639 | 0.2049 |
+| seen | B constrained | 0.2791 | 0.2790 | 1.0000 | 1.0000 | 0.0000 | 0.0246 |
+| seen | D raw | 0.3341 | 0.3186 | 0.5738 | 0.6066 | 0.0902 | 0.1475 |
+| seen | D constrained | 0.3256 | 0.2994 | 1.0000 | 1.0000 | 0.0082 | 0.0656 |
+| unseen | B raw | 0.2902 | 0.3120 | 0.0000 | 0.0000 | 0.2105 | 0.2105 |
+| unseen | B constrained | 0.2936 | 0.2860 | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
+| unseen | D raw | 0.3432 | 0.3103 | 0.6579 | 0.6842 | 0.0263 | 0.1053 |
+| unseen | D constrained | 0.3379 | 0.3054 | 1.0000 | 1.0000 | 0.0000 | 0.0789 |
 
 Review pairwise constrained `30` contoh per split:
 
 | Split | Metric | B Wins | D Wins | Ties |
 | --- | --- | ---: | ---: | ---: |
-| seen | factual correctness | 10 | 6 | 14 |
-| seen | evidence support | 11 | 6 | 13 |
-| seen | source traceability | 0 | 0 | 30 |
-| seen | naturalness | 5 | 14 | 11 |
-| seen | overall | 13 | 13 | 4 |
-| unseen | factual correctness | 9 | 4 | 17 |
-| unseen | evidence support | 8 | 4 | 18 |
-| unseen | source traceability | 3 | 0 | 27 |
-| unseen | naturalness | 9 | 14 | 7 |
-| unseen | overall | 14 | 12 | 4 |
+| seen | factual correctness | 9 | 9 | 12 |
+| seen | evidence support | 9 | 9 | 12 |
+| seen | source traceability | 2 | 0 | 28 |
+| seen | naturalness | 11 | 10 | 9 |
+| seen | overall | 12 | 11 | 7 |
+| unseen | factual correctness | 9 | 9 | 12 |
+| unseen | evidence support | 7 | 9 | 14 |
+| unseen | source traceability | 2 | 0 | 28 |
+| unseen | naturalness | 8 | 11 | 11 |
+| unseen | overall | 11 | 13 | 6 |
 
 Makna constrained run:
 
 - Constraint efektif untuk format: valid JSON dan citation EM menjadi `1.0` pada metrik otomatis karena source dipaksa dari prompt.
-- Constraint mengurangi prompt/instruction echo, tetapi tidak menaikkan recall jawaban; ini menunjukkan failure completeness adalah masalah substansi generatif, bukan hanya parsing output.
-- Setelah `B` dan `D` sama-sama diberi format/source constraint, keunggulan source traceability `D` hilang secara desain; `D` masih lebih natural, tetapi factual/evidence tidak lagi unggul.
+- Constraint mengurangi prompt/instruction echo, tetapi recall jawaban tetap turun sedikit; ini menunjukkan failure completeness adalah masalah substansi generatif, bukan hanya parsing output.
+- Setelah `B` dan `D` sama-sama diberi format/source constraint, keunggulan source traceability `D` hilang secara desain; factual/evidence menjadi seimbang, dengan `D` masih unggul tipis pada unseen overall.
 - Karena itu, klaim final perlu memisahkan tiga hal: raw model behavior (`D` lebih disiplin sumber daripada `B`), constrained system behavior (format bisa dipaksa untuk semua kondisi context), dan answer completeness (masih membutuhkan data/decoding tambahan).
 
 Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
