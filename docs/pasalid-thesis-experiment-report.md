@@ -22,6 +22,8 @@
 - split JSON pilot: `data/pasalid/json_large_split/`
 - QA bank native-expanded clean kandidat final: `data/pasalid/qa_bank_json_native_expanded_clean.jsonl`
 - split native-expanded clean kandidat final: `data/pasalid/json_native_expanded_clean_split/`
+- QA bank natural legal LLM-assisted: `data/pasalid/qa_bank_natural_legal.jsonl`
+- split natural legal LLM-assisted: `data/pasalid/natural_legal_split/`
 
 Ringkasan split native-expanded clean yang paling layak menjadi kandidat final saat ini:
 
@@ -69,6 +71,21 @@ Interpretasi ringkas:
 - `D` adalah cabang paling kuat pada setup clean: LoRA paling berguna ketika dipakai bersama konteks dokumen.
 - `C` tidak stabil sebagai adapter-only memory; pada clean split, `C` tidak mengungguli `A`.
 - JSON-large tetap penting sebagai pilot historis, tetapi bukan lagi ringkasan hasil utama terbaru.
+
+Tambahan natural legal QA LLM-assisted filtered menunjukkan tradeoff yang lebih realistis daripada template clean:
+
+| Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | D Citation EM | D Citation Component | D Copy >10 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen (`132`) | 0.2140 | 0.2733 | 0.2153 | 0.2995 | +0.0013 | +0.0262 | 0.5909 | 0.6136 | 0.1970 |
+| unseen (`38`) | 0.2035 | 0.3335 | 0.2114 | 0.3299 | +0.0080 | -0.0036 | 0.6579 | 0.6579 | 0.2632 |
+
+Makna tambahan natural legal QA:
+
+- Pada seen split, `D` masih mengungguli `B` pada answer F1 sekaligus jauh lebih baik pada citation dan valid JSON.
+- Pada unseen split, `D` hampir setara dengan `B` pada answer F1 dan jauh lebih baik pada citation/format JSON; ini menunjukkan tradeoff antara answer overlap dan source discipline yang lebih seimbang setelah filtering.
+- `C` tetap tidak cukup sebagai adapter-only inference; nilainya hanya mendekati `A` dan jauh di bawah `B/D`.
+- Copy-rate berbasis source masih perlu dikendalikan: `D` lebih rendah daripada `B` pada `copy_run_gt_10_rate`, tetapi tetap ada sekitar `20-26%` output yang terlalu extractive.
+- Review pairwise LLM pada `30` seen dan `30` unseen menunjukkan `D` lebih kuat pada source traceability dan naturalness; pada seen `D` juga unggul overall, sedangkan pada unseen `D` menang overall tipis walau `B` masih lebih kuat factual/evidence.
 
 ## Hasil Utama Historis dan Ablasi
 
@@ -279,6 +296,97 @@ Interpretasi real-case eval:
 - `D` mulai menghasilkan citation yang benar pada sebagian contoh, tetapi masih ada kasus jawaban tidak substantif atau format source_article tidak konsisten.
 - Karena real-case eval ini masih heuristic-generated dari doc units, hasilnya perlu diposisikan sebagai audit robustness awal, bukan benchmark final user-facing.
 
+### Natural legal QA LLM-assisted
+
+Untuk mengurangi ketergantungan pada pertanyaan template dan jawaban extractive, dibuat dataset natural legal QA dengan `scripts/build_pasalid_natural_legal_qa.py --use-llm`. Generator menghasilkan pertanyaan user-style dan jawaban parafrase natural, tetapi tetap menyimpan citation terstruktur dan source reference dari `doc_units`. Builder kemudian diberi filter tambahan untuk mengecualikan unit laporan keuangan/report-like yang lebih cocok untuk table/numeric QA daripada legal QA normatif. Split juga dibuat agar held-out law tidak dipilih dari law dengan jumlah row terlalu kecil.
+
+Ringkasan dataset:
+
+| Item | Nilai |
+| --- | ---: |
+| total rows | 576 |
+| laws | 17 |
+| train rows | 366 |
+| valid rows | 40 |
+| test seen rows | 132 |
+| test unseen rows | 38 |
+| answer style | natural paraphrase with structured citation |
+| avg max source copy run | 3.9253 |
+| max source copy run | 10 |
+
+Artefak lokal:
+
+- QA bank: `data/pasalid/qa_bank_natural_legal.jsonl`
+- split: `data/pasalid/natural_legal_split/`
+- config: `configs/pasalid_natural_legal_tinyllama.yaml`
+- adapter: `outputs/adapters/adapters_pasalid_tinyllama_natural_legal.npz`
+- prediction export: `outputs/predictions/pasalid_natural_legal/`
+
+Training TinyLlama natural legal pada dataset final filtered selesai sampai `1000` iterasi. Validation loss turun dari `2.131` pada iterasi awal menjadi `1.095` pada iterasi `1000`.
+
+Hasil otomatis `A/B/C/D`:
+
+| Split | A F1 | B F1 | C F1 | D F1 | C - A | D - B | D Citation EM | D Citation Component |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| seen (`132`) | 0.2140 | 0.2733 | 0.2153 | 0.2995 | +0.0013 | +0.0262 | 0.5909 | 0.6136 |
+| unseen (`38`) | 0.2035 | 0.3335 | 0.2114 | 0.3299 | +0.0080 | -0.0036 | 0.6579 | 0.6579 |
+
+Copy dan format metrics:
+
+| Split | Kondisi | Valid JSON | Avg Copy Run | Source 4-gram Copy Ratio | Copy Run >10 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| seen | B | 0.0000 | 12.4167 | 0.3094 | 0.3485 |
+| seen | D | 0.6439 | 8.1894 | 0.2700 | 0.1970 |
+| unseen | B | 0.0000 | 14.2368 | 0.3630 | 0.4211 |
+| unseen | D | 0.6842 | 8.2632 | 0.2592 | 0.2632 |
+
+Interpretasi natural legal QA:
+
+- Dataset final filtered ini memenuhi target ukuran minimum praktis: train di atas `300` dan test gabungan `170` contoh.
+- `D` menjadi kondisi terbaik pada seen split untuk answer F1, citation, valid JSON, dan copy-rate.
+- Pada unseen split, `D` hampir setara dengan `B` pada answer F1 dan jauh lebih baik pada citation/valid JSON serta lebih rendah pada copy-run berlebihan.
+- `C` tidak memberi manfaat stabil; nilainya hanya mendekati `A` dan jauh di bawah `B/D`, sehingga adapter-only inference tetap tidak layak menjadi kontribusi utama.
+- Hasil natural legal QA memperkuat bahwa kontribusi LoRA lebih tepat ditulis sebagai peningkatan disiplin penggunaan konteks/source pada kondisi `D`, bukan sebagai peningkatan answer F1 universal pada semua split.
+- Sebelum hasil ini dijadikan klaim final, hasil review LLM perlu dilengkapi audit manual pada contoh gagal untuk membedakan error substansi nyata dari perbedaan parafrase atau format.
+
+Review pairwise berbantu LLM kemudian dilakukan pada `30` contoh seen dan `30` contoh unseen, membandingkan `B` dan `D` secara langsung pada factual correctness, evidence support, source traceability, dan naturalness.
+
+Ringkasan skor rata-rata pairwise:
+
+| Split | Metric | B Avg | D Avg | D - B |
+| --- | --- | ---: | ---: | ---: |
+| seen | factual correctness | 0.8333 | 1.0000 | +0.1667 |
+| seen | evidence support | 0.8000 | 1.0667 | +0.2667 |
+| seen | source traceability | 0.1000 | 1.2667 | +1.1667 |
+| seen | naturalness | 0.5000 | 1.0333 | +0.5333 |
+| unseen | factual correctness | 1.1667 | 0.7333 | -0.4333 |
+| unseen | evidence support | 1.1333 | 0.7333 | -0.4000 |
+| unseen | source traceability | 0.0000 | 1.2000 | +1.2000 |
+| unseen | naturalness | 0.7000 | 0.8667 | +0.1667 |
+
+Winner count pairwise:
+
+| Split | Metric | B Wins | D Wins | Ties |
+| --- | --- | ---: | ---: | ---: |
+| seen | factual correctness | 8 | 9 | 13 |
+| seen | evidence support | 7 | 11 | 12 |
+| seen | source traceability | 2 | 19 | 9 |
+| seen | naturalness | 4 | 18 | 8 |
+| seen | overall | 6 | 20 | 4 |
+| unseen | factual correctness | 11 | 5 | 14 |
+| unseen | evidence support | 12 | 6 | 12 |
+| unseen | source traceability | 0 | 18 | 12 |
+| unseen | naturalness | 9 | 15 | 6 |
+| unseen | overall | 13 | 16 | 1 |
+
+Makna review pairwise natural legal QA:
+
+- Pada seen, `D` unggul overall cukup jelas karena source traceability dan naturalness jauh lebih baik, serta factual/evidence juga sedikit lebih tinggi pada review pairwise.
+- Pada unseen, `B` unggul pada factual/evidence, tetapi `D` unggul tipis overall karena source traceability dan naturalness jauh lebih baik; ini sejalan dengan answer F1 otomatis `B` dan `D` yang hampir setara.
+- `B` hampir selalu dinilai `source-missing` dan sering `too-extractive`, sehingga F1 tinggi tidak otomatis berarti jawaban siap dipakai sebagai legal QA akuntabel.
+- `D` lebih traceable dan lebih natural, tetapi masih sering mendapat label `factually-wrong` atau `unsupported-answer`; ini menunjukkan adapter natural legal perlu perbaikan substansi, bukan hanya format.
+- Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff: LoRA + context memperbaiki traceability/naturalness dan menurunkan extractiveness, sementara peningkatan factual/evidence sudah terlihat pada seen tetapi belum konsisten pada held-out law.
+
 Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
 
 Hasil pada `10` contoh per split:
@@ -339,7 +447,7 @@ Evaluasi lintas model memperlihatkan bahwa efek `D` bersifat **model-dependent**
 
 Makna lintas model:
 
-- TinyLlama dan Mistral q4 long mendukung hipotesis bahwa LoRA dapat bertindak sebagai context-use/domain adapter.
+- TinyLlama dan Mistral q4 long memberi sinyal bahwa LoRA dapat bertindak sebagai context-use/domain adapter.
 - Qwen3 menjadi counterexample penting: adapter tidak otomatis memperbaiki penggunaan konteks dan bahkan dapat mengganggu baseline context.
 - Karena itu, klaim aman bukan “`D` selalu lebih baik daripada `B`”, melainkan “context-use adaptation punya sinyal positif pada sebagian model dan perlu divalidasi per arsitektur/checkpoint”.
 - Citation tetap menjadi bottleneck karena kenaikan `D` terutama terjadi pada overlap isi jawaban, bukan keterlacakan sumber yang stabil.

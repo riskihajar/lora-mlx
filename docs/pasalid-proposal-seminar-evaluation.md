@@ -82,7 +82,7 @@ Setelah seminar, arah tesis sebaiknya direvisi halus menjadi:
 
 Proposal layak maju seminar, tetapi perlu defensif pada klaim adapter-only.
 
-Kekuatan tesis sekarang bukan bahwa `C` pasti menggantikan konteks, melainkan bahwa penelitian dapat membuktikan batas `C` dan menunjukkan bahwa `D` lebih feasible sebagai desain legal QA berbasis open-weight.
+Kekuatan tesis sekarang bukan bahwa `C` pasti menggantikan konteks, melainkan bahwa eksperimen dapat memetakan batas `C` dan menunjukkan bahwa `D` lebih feasible sebagai desain legal QA berbasis open-weight.
 
 Formulasi klaim paling aman:
 

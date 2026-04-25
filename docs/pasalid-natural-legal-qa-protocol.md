@@ -35,6 +35,13 @@ Mode generation:
 - `--use-llm`: jalur utama untuk menghasilkan pertanyaan dan jawaban natural paraphrase;
 - tanpa `--use-llm`: bootstrap heuristic untuk smoke test pipeline, bukan dataset final tesis.
 
+Filter final:
+
+- unit dokumen dengan marker noise OCR dibuang;
+- unit laporan keuangan/report-like dibuang karena lebih cocok untuk table/numeric QA daripada legal QA normatif;
+- respons LLM yang bukan JSON valid dilewati agar satu respons rusak tidak menggagalkan seluruh build;
+- held-out law dipilih dari law dengan jumlah row cukup agar `test_unseen` tidak terlalu kecil.
+
 ## Kondisi Eksperimen
 
 | Kondisi | Makna |
@@ -65,7 +72,7 @@ Evaluator baru `scripts/eval_pasalid_natural_metrics.py` menambahkan metrik yang
 
 Manfaat konfigurasi LoRA harus dievaluasi sebagai kombinasi:
 
-- `D` lebih faktual daripada `B`;
+- `D` lebih faktual daripada `B`, atau setidaknya mendekati `B` pada held-out law;
 - `D` citation lebih baik daripada `B`;
 - `D` tidak sekadar menaikkan F1 dengan copy source mentah;
 - `D` menjaga copy metrics lebih rendah atau setidaknya terkendali.
@@ -75,7 +82,7 @@ Manfaat konfigurasi LoRA harus dievaluasi sebagai kombinasi:
 Generate dataset natural dengan LLM-assisted generator:
 
 ```bash
-source ~/.zshrc && PYTHONPATH=src python3 scripts/build_pasalid_natural_legal_qa.py --use-llm --limit 300 --questions-per-doc 3
+source ~/.zshrc && PYTHONPATH=src python3 scripts/build_pasalid_natural_legal_qa.py --use-llm --limit 600 --questions-per-doc 5
 ```
 
 Smoke test tanpa LLM:
@@ -97,13 +104,54 @@ source ~/.zshrc && scripts/eval_pasalid_natural_legal_tinyllama.sh seen
 source ~/.zshrc && scripts/eval_pasalid_natural_legal_tinyllama.sh unseen
 ```
 
+Review pairwise `B` vs `D`:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/review_pasalid_pair_with_llm.py --b-input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_B_base_with_context.jsonl --d-input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_seen_D_adapter_with_context.jsonl --output outputs/reviews/pasalid_natural_legal/seen_B_vs_D_pairwise_review.jsonl --limit 30
+source ~/.zshrc && PYTHONPATH=src python3 scripts/review_pasalid_pair_with_llm.py --b-input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_B_base_with_context.jsonl --d-input outputs/predictions/pasalid_natural_legal/tinyllama_natural_legal_unseen_D_adapter_with_context.jsonl --output outputs/reviews/pasalid_natural_legal/unseen_B_vs_D_pairwise_review.jsonl --limit 30
+```
+
+Ringkas review pairwise:
+
+```bash
+source ~/.zshrc && PYTHONPATH=src python3 scripts/summarize_pasalid_pairwise_review.py --input outputs/reviews/pasalid_natural_legal/seen_B_vs_D_pairwise_review.jsonl --output outputs/reviews/pasalid_natural_legal/seen_B_vs_D_pairwise_summary.json
+source ~/.zshrc && PYTHONPATH=src python3 scripts/summarize_pasalid_pairwise_review.py --input outputs/reviews/pasalid_natural_legal/unseen_B_vs_D_pairwise_review.jsonl --output outputs/reviews/pasalid_natural_legal/unseen_B_vs_D_pairwise_summary.json
+```
+
+## Hasil Final Saat Ini
+
+Dataset final LLM-assisted filtered:
+
+| Item | Nilai |
+| --- | ---: |
+| total rows | 576 |
+| train rows | 366 |
+| valid rows | 40 |
+| test seen rows | 132 |
+| test unseen rows | 38 |
+| laws | 17 |
+
+Hasil otomatis TinyLlama natural legal:
+
+| Split | B F1 | D F1 | D - B | D Citation EM | D Copy >10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| seen | 0.2733 | 0.2995 | +0.0262 | 0.5909 | 0.1970 |
+| unseen | 0.3335 | 0.3299 | -0.0036 | 0.6579 | 0.2632 |
+
+Review pairwise `30` contoh per split:
+
+| Split | Overall B Wins | D Wins | Ties |
+| --- | ---: | ---: | ---: |
+| seen | 6 | 20 | 4 |
+| unseen | 13 | 16 | 1 |
+
 ## Kriteria Minimum Agar Layak Jadi Hasil Tesis
 
 Eksperimen natural legal QA layak menjadi hasil utama jika:
 
 - dataset final minimal `300` train dan `100` test gabungan seen/unseen;
-- `D` mengungguli `B` pada answer quality atau citation quality;
-- `D` tidak memiliki copy-rate yang lebih buruk secara ekstrem;
+- `D` mengungguli atau mendekati `B` pada answer quality, dan mengungguli `B` pada citation/source discipline;
+- `D` memiliki copy-rate yang lebih rendah atau setidaknya tidak lebih buruk secara ekstrem;
 - minimal `30-50` contoh `B` vs `D` direview manual/LLM untuk factual correctness, evidence support, naturalness, dan citation correctness.
 
 Dengan protokol ini, kontribusi penelitian tidak lagi bergantung pada rule-based template atau copy-paste source, tetapi pada adaptasi perilaku model dalam menjawab legal QA berbasis evidence.

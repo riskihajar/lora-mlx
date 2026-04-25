@@ -70,7 +70,20 @@ def is_usable(row: dict, max_source_chars: int) -> bool:
         "repuellik",
         "repuelik",
     ]
-    return not any(marker in lowered for marker in noisy_markers)
+    if any(marker in lowered for marker in noisy_markers):
+        return False
+
+    financial_markers = [
+        "laporan keuangan",
+        "laporan realisasi anggaran",
+        "laporan perubahan",
+        "neraca",
+        "arus kas",
+    ]
+    if any(marker in lowered for marker in financial_markers):
+        return False
+
+    return True
 
 
 def source_payload(row: dict, answer: str) -> str:
@@ -175,7 +188,10 @@ def llm_examples(row: dict, questions_per_doc: int) -> list[tuple[str, str]]:
     )
     text = generate_text(system_prompt, user_prompt)
     match = re.search(r"\[.*\]", text, flags=re.DOTALL)
-    values = json.loads(match.group(0) if match else text)
+    try:
+        values = json.loads(match.group(0) if match else text)
+    except json.JSONDecodeError:
+        return []
     examples = []
     for value in values:
         if not isinstance(value, dict):
@@ -238,8 +254,10 @@ def split_rows(rows: list[dict], seed: int) -> dict[str, list[dict]]:
     random.Random(seed).shuffle(law_ids)
     if len(law_ids) < 4:
         raise ValueError("Need at least 4 laws for natural legal QA split.")
-    valid_laws = set(law_ids[:1])
-    unseen_laws = set(law_ids[1:2])
+    valid_law = law_ids[0]
+    unseen_law = next((law_id for law_id in law_ids[1:] if len(by_law[law_id]) >= 20), law_ids[1])
+    valid_laws = {valid_law}
+    unseen_laws = {unseen_law}
     train_laws = [law_id for law_id in law_ids if law_id not in valid_laws | unseen_laws]
 
     train = []

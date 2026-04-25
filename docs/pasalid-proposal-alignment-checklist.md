@@ -37,8 +37,8 @@ Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah diba
 | Tujuan Proposal | Status | Bukti Saat Ini | Gap Utama | Next Action |
 | --- | --- | --- | --- | --- |
 | Merancang artefak internalisasi dokumen ke adapter LoRA | ✅ | Pipeline artefak sudah ada: ingestion, doc units, QA generation, split A/B/C, training, evaluation, reporting | - | Pertahankan dan dokumentasikan |
-| Menetapkan rancangan dataset eksperimen yang terukur dan dapat direplikasi | 🟡 | Dataset pipeline sudah reproducible; split dan format sudah ada; beberapa format output sudah diuji | Skala dataset belum final; coverage regulasi belum penuh | Perluas corpus dan kunci setup final |
-| Membandingkan performa A/B/C/D pada metrik utama dan pendukung | 🟡 | A/B/C sudah dibandingkan di beberapa model dan format; D sudah diuji lintas TinyLlama, Qwen3, dan Mistral q4 long | Akuntabilitas dan efisiensi belum terukur penuh; efek D model-dependent | Lengkapi evaluasi manual dan benchmark efisiensi |
+| Menetapkan rancangan dataset eksperimen yang terukur dan dapat direplikasi | ✅ | Natural legal QA final filtered sudah `576` row, train `366`, test gabungan `170`, dan pipeline generate/train/eval/review terdokumentasi | Coverage regulasi masih terbatas pada corpus Pasal.id lokal | Laporkan batas coverage dan jangan overclaim sebagai benchmark nasional |
+| Membandingkan performa A/B/C/D pada metrik utama dan pendukung | 🟡 | A/B/C/D sudah dibandingkan pada clean split dan natural legal QA final; pairwise review `B/D` sudah `30` seen + `30` unseen | Review manual belum mencakup A/C dan efisiensi natural QA belum diperbesar | Tambah audit manual targeted untuk failure case dan benchmark natural QA jika dibutuhkan |
 | Menganalisis sejauh mana C mendekati B dan melampaui A | 🟡 | Pola `B > C > A` muncul di beberapa setup yang stabil | Belum ada satu eksperimen final sebagai basis klaim utama | Kunci satu protokol final |
 | Merumuskan rekomendasi desain sistem yang seimbang antara kualitas, traceability, dan efisiensi | 🟡 | Sudah ada rekomendasi awal: QA utama dan source attribution dipisah; JSON `answer + source` paling layak; source prediction jadi branch attribution | Aspek efisiensi belum cukup terukur | Tambah metrik efisiensi dan finalisasi rekomendasi |
 
@@ -168,13 +168,11 @@ Status implementasi awal:
 
 | Prioritas | Pekerjaan | Alasan |
 | --- | --- | --- |
-| 1 | Perbesar dan kunci split QA final | Agar klaim `A/B/C` punya basis stabil dan tidak hanya pilot |
-| 2 | Jalankan final QA `TinyLlama A/B/C` pada seen dan unseen | Ini bukti utama proposal tentang internalisasi adapter |
-| 3 | Perbesar source attribution `implicit` untuk final tesis | Test implicit saat ini sudah lebih baik, tetapi masih perlu coverage lebih besar untuk klaim final |
+| 1 | Audit manual targeted untuk natural QA failure cases | Pairwise review menunjukkan tradeoff factual/evidence vs source discipline |
+| 2 | Perbesar benchmark efisiensi pada setup natural QA | Mengisi dimensi efisiensi dengan data yang sesuai task final |
+| 3 | Perbesar source attribution `implicit` jika attribution tetap jadi sub-eksperimen | Test implicit saat ini sudah lebih baik, tetapi masih perlu coverage lebih besar untuk klaim final |
 | 4 | Uji objective attribution yang lebih kuat | Retraining implicit biasa belum memperbaiki component score total |
-| 5 | Perbaiki benchmark efisiensi menjadi per-example measurement | Mengisi dimensi efisiensi yang menjadi target proposal |
-| 6 | Lakukan manual review balanced untuk `A/B/C/D` | Mengisi evidence support dan unsupported answer rate final |
-| 7 | Susun pembahasan tesis dengan dua cabang eksperimen | Menghindari overclaim bahwa satu output generatif menyelesaikan QA dan citation sekaligus |
+| 5 | Susun pembahasan tesis dengan dua cabang eksperimen | Menghindari overclaim bahwa satu output generatif menyelesaikan QA dan citation sekaligus |
 
 Status terbaru QA final:
 
@@ -197,7 +195,10 @@ Status terbaru QA final:
 | Kesimpulan clean TinyLlama | ✅ | Clean split memperkuat `D` sebagai context-use adapter; `C` tidak stabil dan tidak layak jadi klaim utama final |
 | Review clean `B` vs `D` | ✅ | LLM-assisted review `20` contoh/split mendukung `D` pada factual/evidence/source baik seen maupun unseen |
 | Benchmark efisiensi clean per-example | ✅ | Token dihitung dengan tokenizer; `C` mengurangi prompt token tetapi belum lebih cepat; `D` kualitas tinggi dengan latency lebih mahal dari `B` |
-| Next action QA | 🟡 | Perbesar benchmark per-example dan lakukan manual review final lebih besar |
+| Natural legal QA final filtered | ✅ | `576` row; train `366`, valid `40`, test_seen `132`, test_unseen `38`; unit report-like difilter dari held-out law |
+| Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0262`; unseen: `D-B -0.0036`; `D` jauh lebih baik pada citation dan copy-rate |
+| Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `20/30` seen dan `16/30` unseen |
+| Next action QA | 🟡 | Audit manual targeted untuk failure case natural QA dan benchmark efisiensi natural QA |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 
@@ -205,7 +206,7 @@ Status terbaru QA final:
 | --- | --- |
 | Internalization | Adapter LoRA menunjukkan internalisasi parsial hanya pada setup tertentu; clean split menunjukkan `C` tidak stabil dan tidak boleh menjadi klaim utama tunggal |
 | Context baseline | Kondisi `B` tetap menjadi upper bound praktis terhadap adapter-only `C`; kondisi `D` diuji terpisah sebagai adapter dengan konteks |
-| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama, native-expanded TinyLlama, dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent |
+| Context-use adaptation | Kondisi `D` menunjukkan sinyal positif pada TinyLlama clean, natural legal QA, dan Mistral q4 long, tetapi gagal pada Qwen3 sehingga klaim harus model-dependent dan task-dependent |
 | Source traceability | Source attribution belum reliabel jika dipaksa muncul sebagai bagian dari output QA generatif tunggal |
 | Attribution task | Source attribution lebih menjanjikan jika diformulasikan sebagai task khusus source prediction |
 | Efisiensi | Keunggulan utama `C` adalah pengurangan panjang prompt dibanding `B`; klaim latency dan memory hanya boleh dibuat setelah benchmark final |
@@ -217,7 +218,7 @@ Klaim yang sebaiknya dihindari:
 | Adapter sudah menggantikan kebutuhan konteks dokumen | `B` masih konsisten lebih kuat daripada adapter-only `C` |
 | Adapter dengan konteks selalu lebih baik daripada base dengan konteks | Qwen3 menunjukkan `D < B` pada seen dan unseen |
 | Model sudah memberi citation legal yang reliabel | Citation metrics QA utama masih sangat lemah |
-| Source-prediction membuktikan internalisasi penuh | Test eksplisit masih berisiko mengandung jawaban sumber di prompt |
+| Source-prediction menunjukkan internalisasi penuh | Test eksplisit masih berisiko mengandung jawaban sumber di prompt |
 | Model lebih besar otomatis lebih baik | Qwen3 dan Mistral tidak mengungguli TinyLlama pada QA utama saat ini |
 
 ## 9) Validasi Cepat Adaptasi Hypernetwork
@@ -377,7 +378,7 @@ Interpretasi:
 | Mixture global bisa mengungguli basis tunggal | LoRA fusion bukan sekadar kosmetik; ada sinyal komplementaritas antar adapter |
 | Oracle per-law lebih tinggi pada seen split | Learned router berbasis dokumen/law layak diuji |
 | Citation tetap nol | Mixture saat ini membantu answer overlap, belum memperbaiki traceability |
-| Unseen improvement kecil | Generalisasi routing ke held-out law masih belum terbukti kuat |
+| Unseen improvement kecil | Generalisasi routing ke held-out law masih belum cukup kuat |
 
 ### Hasil learned router awal
 
