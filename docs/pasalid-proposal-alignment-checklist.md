@@ -168,7 +168,7 @@ Status implementasi awal:
 
 | Prioritas | Pekerjaan | Alasan |
 | --- | --- | --- |
-| 1 | Audit manual targeted untuk natural QA failure cases | Pairwise review menunjukkan tradeoff factual/evidence vs source discipline |
+| 1 | Perbaiki residual OCR/report-like filtering dan error negasi natural QA | Failure audit menunjukkan masih ada semantic drift, question echo, wrong polarity, dan sisa unit report-like |
 | 2 | Perbesar benchmark efisiensi pada setup natural QA | Mengisi dimensi efisiensi dengan data yang sesuai task final |
 | 3 | Perbesar source attribution `implicit` jika attribution tetap jadi sub-eksperimen | Test implicit saat ini sudah lebih baik, tetapi masih perlu coverage lebih besar untuk klaim final |
 | 4 | Uji objective attribution yang lebih kuat | Retraining implicit biasa belum memperbaiki component score total |
@@ -198,7 +198,8 @@ Status terbaru QA final:
 | Natural legal QA final filtered | ✅ | `576` row; train `366`, valid `40`, test_seen `132`, test_unseen `38`; unit report-like difilter dari held-out law |
 | Evaluasi natural legal QA final | ✅ | Seen: `D-B +0.0262`; unseen: `D-B -0.0036`; `D` jauh lebih baik pada citation dan copy-rate |
 | Review pairwise natural `B` vs `D` | ✅ | `30` seen + `30` unseen; overall D wins `20/30` seen dan `16/30` unseen |
-| Next action QA | 🟡 | Audit manual targeted untuk failure case natural QA dan benchmark efisiensi natural QA |
+| Failure audit natural `D` | ✅ | D failure rows: seen `9/30`, unseen `16/30`; pola utama semantic drift, question echo, incomplete answer, wrong polarity, dan entity confusion |
+| Next action QA | 🟡 | Perbaiki residual data noise/error negasi dan benchmark efisiensi natural QA |
 
 ## 8) Batas Klaim Final yang Direkomendasikan
 

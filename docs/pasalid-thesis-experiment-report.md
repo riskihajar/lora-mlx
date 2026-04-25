@@ -387,6 +387,36 @@ Makna review pairwise natural legal QA:
 - `D` lebih traceable dan lebih natural, tetapi masih sering mendapat label `factually-wrong` atau `unsupported-answer`; ini menunjukkan adapter natural legal perlu perbaikan substansi, bukan hanya format.
 - Temuan final untuk natural QA sebaiknya ditulis sebagai tradeoff: LoRA + context memperbaiki traceability/naturalness dan menurunkan extractiveness, sementara peningkatan factual/evidence sudah terlihat pada seen tetapi belum konsisten pada held-out law.
 
+Audit targeted kemudian dilakukan pada failure cases `D` yang mendapat label `factually-wrong` atau `unsupported-answer` dalam pairwise review.
+
+Ringkasan jumlah failure `D`:
+
+| Split | Reviewed Rows | D Failure Rows | Catatan |
+| --- | ---: | ---: | --- |
+| seen | 30 | 9 | Termasuk beberapa unit OCR/report-like yang masih lolos filter karena teks sumber rusak |
+| unseen | 30 | 16 | Didominasi held-out law Kabupaten Tanah Datar dengan pertanyaan definisi, daftar kecamatan, ibu kota, dan peralihan aturan |
+
+Kategori error utama `D` dari audit targeted:
+
+| Kategori | Seen | Unseen | Pola |
+| --- | ---: | ---: | --- |
+| semantic drift / unsupported | 2 | 5 | Jawaban tidak menjawab inti pertanyaan walau citation sering benar |
+| question echo | 1 | 4 | Model mengulang pertanyaan sebagai isi `answer` |
+| too short / incomplete | 3 | 1 | Jawaban hanya fragmen angka, tanggal, atau satu item |
+| wrong or malformed source/JSON | 2 | 2 | Citation salah schema atau salah nomor sumber |
+| extractive list / copy error | 1 | 1 | Model menyalin daftar pasal tetapi kehilangan item atau format JSON |
+| wrong polarity / negation | 0 | 2 | Jawaban membalik makna ya/tidak atau tetap berlaku/tidak berlaku |
+| entity type confusion | 0 | 1 | Entitas kabupaten/kecamatan/ibu kota tertukar |
+
+Makna audit failure cases:
+
+- Banyak kegagalan `D` adalah error substansi nyata, bukan hanya perbedaan parafrase dengan gold answer.
+- `D` sering mampu mempertahankan citation JSON yang benar meskipun isi `answer` salah; citation correctness dan factual correctness perlu dilaporkan terpisah.
+- Pada pertanyaan daftar wilayah dan status administratif, model rentan salah hitung, menghilangkan item, atau tertukar jenis entitas.
+- Pada pertanyaan peralihan aturan, model rentan membalik negasi seperti "masih berlaku" vs "dicabut/tidak berlaku".
+- Beberapa kegagalan seen berasal dari sisa unit OCR/report-like seperti laporan operasional dengan angka panjang; filter dataset sudah mengurangi masalah ini pada held-out law, tetapi belum menghapus semua noise di seen split.
+- Implikasi teknis berikutnya adalah memperbaiki data filtering untuk OCR/report-like residual, menambahkan target training khusus untuk pertanyaan negasi/peralihan, dan mempertimbangkan decoding/format constraint agar citation JSON tidak muncul ketika jawaban substantif gagal.
+
 Benchmark efisiensi clean `A/B/C/D` kemudian diperbaiki menjadi per-example dan tokenizer-based. Script `scripts/benchmark_pasalid_experiment.py` sekarang mendukung `--per-example`, menghitung prompt token dengan tokenizer model, dan mengukur latency tiap contoh sehingga p50/p95 tidak lagi hasil pembagian rata dari satu batch export.
 
 Hasil pada `10` contoh per split:
