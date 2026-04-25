@@ -9,6 +9,7 @@ ITERS=${2:-20}
 MAX_EXAMPLES=${3:-5}
 EVAL_EXAMPLES=${4:-1}
 MODEL=${5:-mlx-community/gemma-2-2b-it}
+LEARNING_RATE=${6:-2e-4}
 
 PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
   --model "${MODEL}" \
@@ -21,8 +22,11 @@ PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
   --max-specs 2 \
   --hidden-size 128 \
   --rank 4 \
+  --learning-rate "${LEARNING_RATE}" \
   --context-encoder token-hash \
   --context-buckets 8192 \
   --context-latents 8 \
   --per-rank-gen \
+  --per-layer-processing \
+  --num-pre-head-layers 1 \
   --loss-scope full-answer

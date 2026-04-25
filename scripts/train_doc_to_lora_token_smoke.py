@@ -65,6 +65,12 @@ def parse_args():
         help="Generate each LoRA rank from a separate rank-conditioned latent.",
     )
     parser.add_argument(
+        "--per-layer-processing",
+        action="store_true",
+        help="Add layer embeddings and residual MLP blocks before LoRA heads.",
+    )
+    parser.add_argument("--num-pre-head-layers", type=int, default=1)
+    parser.add_argument(
         "--context-encoder",
         choices=["hash", "token-hash"],
         default="hash",
@@ -358,6 +364,8 @@ def main():
             scale=20.0,
             spec_conditioning=args.spec_conditioning,
             per_rank_gen=args.per_rank_gen,
+            per_layer_processing=args.per_layer_processing,
+            num_pre_head_layers=args.num_pre_head_layers,
         )
     else:
         hypernet = DocToLoRAHypernetwork(
@@ -368,6 +376,8 @@ def main():
             scale=20.0,
             spec_conditioning=args.spec_conditioning,
             per_rank_gen=args.per_rank_gen,
+            per_layer_processing=args.per_layer_processing,
+            num_pre_head_layers=args.num_pre_head_layers,
         )
     examples = build_examples(tokenizer, args)
     eval_examples = []
@@ -393,6 +403,8 @@ def main():
             print(f"iter {step + 1}: loss={loss_value.item():.6f}")
 
     final_loss = loss_fn(hypernet).item()
+    if math.isnan(final_loss):
+        raise SystemExit("token smoke task produced NaN loss")
     final_acc = accuracy(model, hypernet, examples, args.loss_scope)
     final_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
     final_eval = metrics(model, hypernet, eval_examples, args.loss_scope)
@@ -417,6 +429,8 @@ def main():
     print(f"context_latents={args.context_latents}")
     print(f"spec_conditioning={args.spec_conditioning}")
     print(f"per_rank_gen={args.per_rank_gen}")
+    print(f"per_layer_processing={args.per_layer_processing}")
+    print(f"num_pre_head_layers={args.num_pre_head_layers}")
     print(f"train_examples={len(examples)}")
     print(f"eval_examples={len(eval_examples)}")
 

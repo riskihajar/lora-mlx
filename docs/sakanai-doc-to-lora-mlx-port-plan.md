@@ -198,6 +198,32 @@ per_rank_gen=True
 
 This is the current default wrapper setting because it matches SakanaAI config and slightly improves held-out loss over the latent-only non-per-rank run (`2.74x` vs `2.66x` eval improvement).
 
+SakanaAI's main scripts also use `per_layer_processing=True`. The MLX path now supports `--per-layer-processing` with a residual MLP block before the LoRA heads. The first run at the previous high smoke LR (`2e-3`) produced NaNs, so the Gemma wrappers now default to `2e-4`, closer to the lower-LR regime used by upstream chunk training. Validated output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=2e-4
+response_tokens=52
+initial_loss=13.237518
+final_loss=4.678885
+improvement=2.83x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=14.262685
+final_eval_loss=5.230211
+final_eval_token_acc=0.200
+eval_improvement=2.73x
+context_encoder=token-hash
+context_latents=8
+per_rank_gen=True
+per_layer_processing=True
+num_pre_head_layers=1
+```
+
+This brings the MLX skeleton closer to the upstream hypernetwork settings: `down_proj`, `per_rank_gen=True`, `per_layer_processing=True`, generated LoRA trained against Sakana self-generated Gemma examples.
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text
