@@ -155,7 +155,27 @@ eval_improvement=1.84x
 context_encoder=token-hash
 ```
 
-Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples and improves a held-out example when the context encoder is learnable. This isolates a real architectural effect: dataset availability alone was not enough; replacing static hash features with trainable token context features improves both train and eval loss. The next SakanaAI parity gap is adding a model-derived context encoder and Perceiver-style aggregator.
+Validated output after adding an 8-latent query aggregator over trainable token context features:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+response_tokens=52
+initial_loss=13.440420
+final_loss=5.293917
+improvement=2.54x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=14.391494
+final_eval_loss=5.402127
+final_eval_token_acc=0.200
+eval_improvement=2.66x
+context_encoder=token-hash
+context_latents=8
+```
+
+Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples and improves a held-out example when the context encoder is learnable. Dataset availability alone was not enough; replacing static hash features with trainable token context features improved both train and eval loss, and adding latent queries improved eval loss further. The next SakanaAI parity gap is replacing this lightweight latent aggregator with model-derived context activations and a fuller Perceiver-style block.
 
 This enables the comparison we need:
 

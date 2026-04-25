@@ -53,6 +53,7 @@ def parse_args():
     parser.add_argument("--feature-size", type=int, default=64)
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--context-buckets", type=int, default=4096)
+    parser.add_argument("--context-latents", type=int, default=1)
     parser.add_argument(
         "--context-encoder",
         choices=["hash", "token-hash"],
@@ -340,6 +341,7 @@ def main():
         hypernet = TokenDocToLoRAHypernetwork(
             specs,
             num_buckets=args.context_buckets,
+            num_latents=args.context_latents,
             feature_size=args.feature_size,
             hidden_size=args.hidden_size,
             rank=args.rank,
@@ -398,6 +400,7 @@ def main():
     print(f"num_specs={len(specs)}")
     print(f"loss_scope={args.loss_scope}")
     print(f"context_encoder={args.context_encoder}")
+    print(f"context_latents={args.context_latents}")
     print(f"train_examples={len(examples)}")
     print(f"eval_examples={len(eval_examples)}")
 

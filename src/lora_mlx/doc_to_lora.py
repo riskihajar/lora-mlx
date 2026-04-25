@@ -117,12 +117,25 @@ class DocToLoRAHypernetwork(nn.Module):
 class HashedTokenContextEncoder(nn.Module):
     """Trainable mean-pooled token encoder with bounded embedding size."""
 
-    def __init__(self, num_buckets: int = 4096, feature_size: int = 256):
+    def __init__(
+        self,
+        num_buckets: int = 4096,
+        feature_size: int = 256,
+        num_latents: int = 1,
+    ):
         super().__init__()
         if num_buckets <= 0:
             raise ValueError("num_buckets must be positive")
+        if num_latents <= 0:
+            raise ValueError("num_latents must be positive")
         self.num_buckets = num_buckets
+        self.num_latents = num_latents
         self.embedding = nn.Embedding(num_buckets, feature_size)
+        self.latent_queries = mx.random.normal((num_latents, feature_size)) * 0.02
+        self.query_proj = nn.Linear(feature_size, feature_size, bias=False)
+        self.key_proj = nn.Linear(feature_size, feature_size, bias=False)
+        self.value_proj = nn.Linear(feature_size, feature_size, bias=False)
+        self.out_proj = nn.Linear(num_latents * feature_size, feature_size)
         self.norm = nn.RMSNorm(feature_size)
 
     def __call__(self, token_ids: mx.array) -> mx.array:
@@ -130,7 +143,15 @@ class HashedTokenContextEncoder(nn.Module):
             token_ids = token_ids.reshape(-1)
         token_ids = token_ids.astype(mx.int32) % self.num_buckets
         x = self.embedding(token_ids)
-        return self.norm(mx.mean(x, axis=0))
+        if self.num_latents == 1:
+            return self.norm(mx.mean(x, axis=0))
+        q = self.query_proj(self.latent_queries)
+        k = self.key_proj(x)
+        v = self.value_proj(x)
+        scores = (q @ k.T) / math.sqrt(q.shape[-1])
+        weights = mx.softmax(scores.astype(mx.float32), axis=-1).astype(v.dtype)
+        latents = weights @ v
+        return self.norm(self.out_proj(latents.reshape(-1)))
 
 
 class TokenDocToLoRAHypernetwork(nn.Module):
@@ -140,13 +161,18 @@ class TokenDocToLoRAHypernetwork(nn.Module):
         self,
         module_specs: Sequence[LoRAModuleSpec],
         num_buckets: int = 4096,
+        num_latents: int = 1,
         feature_size: int = 256,
         hidden_size: int = 512,
         rank: int = 8,
         scale: float = 20.0,
     ):
         super().__init__()
-        self.context_encoder = HashedTokenContextEncoder(num_buckets, feature_size)
+        self.context_encoder = HashedTokenContextEncoder(
+            num_buckets,
+            feature_size,
+            num_latents=num_latents,
+        )
         self.hypernet = DocToLoRAHypernetwork(
             module_specs,
             feature_size=feature_size,
