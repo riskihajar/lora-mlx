@@ -175,6 +175,20 @@ context_encoder=token-hash
 context_latents=8
 ```
 
+Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
+
+```text
+initial_loss=13.184215
+final_loss=5.058187
+improvement=2.61x
+initial_eval_loss=13.607017
+final_eval_loss=6.725529
+eval_improvement=2.02x
+spec_conditioning=True
+```
+
+For now the wrappers keep spec conditioning off because the latent-only setting has the better held-out loss (`2.66x` eval improvement).
+
 Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples and improves a held-out example when the context encoder is learnable. Dataset availability alone was not enough; replacing static hash features with trainable token context features improved both train and eval loss, and adding latent queries improved eval loss further. The next SakanaAI parity gap is replacing this lightweight latent aggregator with model-derived context activations and a fuller Perceiver-style block.
 
 This enables the comparison we need:
