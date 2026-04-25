@@ -19,6 +19,24 @@ The current baseline in this repo is useful but different: it builds supervised 
 | `lora_merger.py` | Combines chunk-level LoRA adapters across document chunks. | Defer until single-context generation works; then add chunk merge/weighted combine. |
 | Training objective | Learns hypernetwork parameters from context/question/answer behavior. | Add synthetic key-value smoke training before Pasal.id-scale training. |
 
+## Model Alignment
+
+The upstream SakanaAI Doc-to-LoRA main and NIAH scripts use `google/gemma-2-2b-it` with LoRA on `down_proj` and rank `8`:
+
+```text
+--model_name_or_path=google/gemma-2-2b-it
+--target_modules=down_proj
+--lora_r=8
+```
+
+For this MLX port, the matching practical model target is:
+
+```text
+mlx-community/gemma-2-2b-it
+```
+
+TinyLlama remains useful only as a small local baseline. It should not be treated as the SakanaAI-equivalent target model.
+
 ## Minimum Native MLX MVP
 
 1. Infer target linear modules from the loaded MLX model.
@@ -82,36 +100,40 @@ source ~/.zshrc && PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.
   --max-specs 1
 ```
 
-This script trains the hypernetwork through the frozen model's next-token loss. For each synthetic document it generates LoRA weights, patches selected transformer projections, runs the model forward, and backpropagates token cross-entropy into the hypernetwork.
+This script trains the hypernetwork through the frozen model's next-token loss. For each synthetic document it generates LoRA weights, patches selected transformer projections, runs the model forward, and backpropagates token cross-entropy into the hypernetwork. The default target module is `down_proj` to match SakanaAI's Gemma setup.
 
 Expected smoke output should show token loss improvement, for example:
 
 ```text
-initial_loss=4.895902
-final_loss=4.356647
-improvement=1.12x
+initial_loss=5.219040
+final_loss=2.876649
+improvement=1.81x
+final_acc=0.333
 ```
 
-To run the same path on the MLX model used by the document-specific baseline:
+To run the same path on the SakanaAI-aligned Gemma MLX model:
 
 ```bash
-source ~/.zshrc && scripts/train_doc_to_lora_tinyllama_token_smoke.sh mlx_model 3
+source ~/.zshrc && scripts/train_doc_to_lora_gemma_token_smoke.sh mlx-community/gemma-2-2b-it 3
 ```
 
-The local `mlx_model` smoke has been validated with a minimal configuration:
+The older local `mlx_model` smoke has also been validated with a minimal configuration:
 
 ```text
-initial_loss=13.364178
-final_loss=10.082440
-improvement=1.33x
+initial_loss=12.959651
+final_loss=0.000015
+improvement=849323.69x
+final_acc=1.000
 ```
 
-If `mlx_model` is not available, convert a Hugging Face model to 4-bit MLX first:
+`mlx-community/gemma-2-2b-it` was not present in the local Hugging Face cache during this update, so the Gemma smoke wrapper is prepared but not force-run to avoid an implicit multi-GB download.
+
+If a local Gemma MLX checkpoint is preferred, either download `mlx-community/gemma-2-2b-it` through the loader or convert the original Hugging Face model to MLX. Access to Google's Gemma license may be required for the original `google/gemma-2-2b-it` checkpoint:
 
 ```bash
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.convert \
-  --hf-path TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
-  --mlx-path mlx_model \
+  --hf-path google/gemma-2-2b-it \
+  --mlx-path mlx_gemma_2_2b_it_q4 \
   --quantize \
   --q-bits 4
 ```

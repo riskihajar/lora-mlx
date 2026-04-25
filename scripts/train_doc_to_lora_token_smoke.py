@@ -51,7 +51,7 @@ def parse_args():
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--rank", type=int, default=4)
     parser.add_argument("--lora-layers", type=int, default=1)
-    parser.add_argument("--target-modules", default="q_proj,v_proj")
+    parser.add_argument("--target-modules", default="down_proj")
     parser.add_argument("--iters", type=int, default=60)
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--seed", type=int, default=11)
