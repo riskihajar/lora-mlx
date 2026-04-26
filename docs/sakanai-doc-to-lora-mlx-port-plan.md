@@ -224,6 +224,30 @@ num_pre_head_layers=1
 
 This brings the MLX skeleton closer to the upstream hypernetwork settings: `down_proj`, `per_rank_gen=True`, `per_layer_processing=True`, generated LoRA trained against Sakana self-generated Gemma examples.
 
+The MLX path also supports a model-derived context encoder mode with `--context-encoder model-embed`. This uses frozen Gemma input embeddings as document features, making it closer to SakanaAI's `ctx_encoder_type=embed_only` than the trainable token-hash encoder. Validated output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=2e-4
+response_tokens=52
+initial_loss=13.432360
+final_loss=4.890327
+improvement=2.75x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=14.356888
+final_eval_loss=5.330220
+final_eval_token_acc=0.200
+eval_improvement=2.69x
+context_encoder=model-embed
+per_rank_gen=True
+per_layer_processing=True
+```
+
+This is slightly below the best lightweight token-latent run on eval (`2.69x` vs `2.73x`), but it is a parity improvement because context features now come from the Gemma model rather than a separate toy embedding table.
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text

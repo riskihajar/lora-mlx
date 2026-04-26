@@ -26,6 +26,7 @@ class TokenExample:
     document_ids: mx.array
     prompt_ids: mx.array
     response_ids: mx.array
+    document_features: mx.array | None = None
 
 
 class ToyTokenizer:
@@ -72,9 +73,9 @@ def parse_args():
     parser.add_argument("--num-pre-head-layers", type=int, default=1)
     parser.add_argument(
         "--context-encoder",
-        choices=["hash", "token-hash"],
+        choices=["hash", "token-hash", "model-embed"],
         default="hash",
-        help="Use deterministic text hash features or trainable hashed token features.",
+        help="Use deterministic text hash, trainable token hash, or frozen model embeddings.",
     )
     parser.add_argument("--rank", type=int, default=4)
     parser.add_argument("--lora-layers", type=int, default=1)
@@ -306,9 +307,31 @@ def response_token_count(examples, loss_scope: str):
 
 
 def generate_loras(hypernet, example):
+    if example.document_features is not None:
+        return hypernet(example.document_features)
     if isinstance(hypernet, TokenDocToLoRAHypernetwork):
         return hypernet(example.document_ids)
     return hypernet.generate_from_text(example.document)
+
+
+def attach_model_embedding_features(model, examples):
+    embed = model.model.embed_tokens
+    scale = getattr(model.model, "embed_scale", 1.0)
+    out = []
+    for example in examples:
+        embeddings = embed(example.document_ids[None, :])[0] * scale
+        features = mx.mean(embeddings, axis=0)
+        out.append(
+            TokenExample(
+                document=example.document,
+                document_ids=example.document_ids,
+                prompt_ids=example.prompt_ids,
+                response_ids=example.response_ids,
+                document_features=features,
+            )
+        )
+    mx.eval([example.document_features for example in out])
+    return out
 
 
 def metrics(model, hypernet, examples, loss_scope: str):
@@ -353,12 +376,16 @@ def main():
     if not specs:
         raise SystemExit("no target LoRA modules found")
 
+    hypernet_feature_size = args.feature_size
+    if args.context_encoder == "model-embed":
+        hypernet_feature_size = model.args.hidden_size
+
     if args.context_encoder == "token-hash":
         hypernet = TokenDocToLoRAHypernetwork(
             specs,
             num_buckets=args.context_buckets,
             num_latents=args.context_latents,
-            feature_size=args.feature_size,
+            feature_size=hypernet_feature_size,
             hidden_size=args.hidden_size,
             rank=args.rank,
             scale=20.0,
@@ -370,7 +397,7 @@ def main():
     else:
         hypernet = DocToLoRAHypernetwork(
             specs,
-            feature_size=args.feature_size,
+            feature_size=hypernet_feature_size,
             hidden_size=args.hidden_size,
             rank=args.rank,
             scale=20.0,
@@ -380,6 +407,8 @@ def main():
             num_pre_head_layers=args.num_pre_head_layers,
         )
     examples = build_examples(tokenizer, args)
+    if args.context_encoder == "model-embed":
+        examples = attach_model_embedding_features(model, examples)
     eval_examples = []
     if args.eval_examples > 0:
         if args.eval_examples >= len(examples):
