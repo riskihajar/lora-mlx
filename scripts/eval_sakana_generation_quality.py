@@ -44,6 +44,22 @@ def parse_args():
     parser.add_argument("--max-examples", type=int, default=8)
     parser.add_argument("--max-new-tokens", type=int, default=24)
     parser.add_argument("--temp", type=float, default=0.0)
+    parser.add_argument(
+        "--suppress-initial-whitespace",
+        action="store_true",
+        help="When greedy decoding, skip whitespace-only candidates until content appears.",
+    )
+    parser.add_argument(
+        "--top-k-fallback",
+        type=int,
+        default=32,
+        help="Number of candidates to scan when suppressing whitespace-only tokens.",
+    )
+    parser.add_argument(
+        "--stop-on-end-turn",
+        action="store_true",
+        help="Stop decoding once the decoded output contains <end_of_turn>.",
+    )
     parser.add_argument("--hypernet", default=None)
     parser.add_argument("--ordinary-adapter", default=None)
     parser.add_argument("--hidden-size", type=int, default=128)
@@ -227,17 +243,68 @@ def apply_dynamic_generated_loras(model, generated_loras):
             raise ValueError(f"unsupported module {generated_lora.module_name!r}")
 
 
-def generate_ids(model, prompt_ids: mx.array, max_new_tokens: int, temp: float, eos_token_id):
+def sample_token(
+    logits: mx.array,
+    tokenizer,
+    temp: float,
+    suppress_whitespace: bool,
+    top_k_fallback: int,
+):
+    if temp != 0:
+        return int(mx.random.categorical(logits * (1 / temp)).item())
+    if not suppress_whitespace:
+        return int(mx.argmax(logits, axis=-1).item())
+    scores = np.array(logits, copy=False)
+    candidate_count = min(max(top_k_fallback, 1), scores.shape[-1])
+    candidate_ids = np.argpartition(-scores, candidate_count - 1)[:candidate_count]
+    candidate_ids = candidate_ids[np.argsort(-scores[candidate_ids])]
+    for token_id in candidate_ids:
+        piece = tokenizer.decode([int(token_id)])
+        if "<end_of_turn>" in piece or "<start_of_turn>" in piece:
+            continue
+        if piece.strip():
+            return int(token_id)
+    return int(candidate_ids[0])
+
+
+def generate_ids(
+    model,
+    prompt_ids: mx.array,
+    tokenizer,
+    max_new_tokens: int,
+    temp: float,
+    eos_token_id,
+    suppress_initial_whitespace: bool,
+    top_k_fallback: int,
+    stop_on_end_turn: bool,
+):
     tokens = []
-    for token, _ in zip(lora_utils.generate(prompt_ids, model, temp=temp), range(max_new_tokens)):
-        token_id = int(token.item())
+    y = prompt_ids
+    cache = None
+    emitted_content = False
+    for _ in range(max_new_tokens):
+        logits, cache = model(y[None], cache=cache)
+        logits = logits[:, -1, :][0]
+        token_id = sample_token(
+            logits,
+            tokenizer,
+            temp,
+            suppress_initial_whitespace and not emitted_content,
+            top_k_fallback,
+        )
         if eos_token_id is not None and token_id == eos_token_id:
             break
         tokens.append(token_id)
+        emitted_content = emitted_content or bool(tokenizer.decode([token_id]).strip())
+        if stop_on_end_turn and "<end_of_turn>" in tokenizer.decode(tokens):
+            break
+        y = mx.array([token_id], dtype=mx.int32)
+        mx.eval(y)
     return tokens
 
 
 def normalize(text: str):
+    text = text.replace("<end_of_turn>", " ").replace("<start_of_turn>", " ")
     return re.findall(r"\w+", text.lower())
 
 
@@ -286,7 +353,17 @@ def main():
         if hypernet is not None:
             generated_loras = generated_loras_for_example(model, hypernet, example, args)
             apply_dynamic_generated_loras(model, generated_loras)
-        output_ids = generate_ids(model, example.prompt_ids, args.max_new_tokens, args.temp, eos_token_id)
+        output_ids = generate_ids(
+            model,
+            example.prompt_ids,
+            tokenizer,
+            args.max_new_tokens,
+            args.temp,
+            eos_token_id,
+            args.suppress_initial_whitespace,
+            args.top_k_fallback,
+            args.stop_on_end_turn,
+        )
         prediction = tokenizer.decode(output_ids)
         reference = tokenizer.decode(example.response_ids.tolist())
         f1 = token_f1(prediction, reference)
@@ -304,6 +381,9 @@ def main():
     print(f"examples={len(examples)}")
     print(f"skip_examples={args.skip_examples}")
     print(f"max_new_tokens={args.max_new_tokens}")
+    print(f"suppress_initial_whitespace={args.suppress_initial_whitespace}")
+    print(f"top_k_fallback={args.top_k_fallback}")
+    print(f"stop_on_end_turn={args.stop_on_end_turn}")
     print(f"mean_f1={float(np.mean(f1_scores)):.6f}")
     print(f"exact_acc={float(np.mean(exact_scores)):.6f}")
     print(f"mean_generated_tokens={float(np.mean(output_lengths)):.2f}")

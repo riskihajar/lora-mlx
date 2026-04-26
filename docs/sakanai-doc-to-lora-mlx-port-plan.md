@@ -901,6 +901,31 @@ ordinary_lora_i8_exact_acc=0.000000
 
 Qualitatively, the base model repeats non-answer fragments, while generated-LoRA and ordinary-LoRA often collapse to whitespace-like greedy outputs on the sampled examples. This confirms the current strongest evidence is teacher-forced internalization, not usable answer generation. The next generation-facing work should improve prompt formatting/decoding and evaluate more examples before making any natural-answer quality claim.
 
+The generation evaluator also supports a constrained greedy check that suppresses whitespace-only initial candidates and excludes turn special tokens from F1 scoring:
+
+```bash
+PYTHONPATH=src python3 scripts/eval_sakana_generation_quality.py \
+  --mode generated \
+  --model mlx-community/gemma-2-2b-it \
+  --hypernet outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5_best.npz \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_multi_256.jsonl \
+  --skip-examples 192 \
+  --max-examples 4 \
+  --max-new-tokens 24 \
+  --suppress-initial-whitespace \
+  --stop-on-end-turn
+```
+
+After fixing the metric to ignore `<end_of_turn>` / `<start_of_turn>`, constrained generation still does not recover answer content:
+
+```text
+base_constrained_mean_f1=0.000000
+generated_lora_constrained_mean_f1=0.000000
+ordinary_lora_i8_constrained_mean_f1=0.000000
+```
+
+The constrained decoder changes the failure mode from blank outputs to repeated wrong content such as `sworn` or non-English fragments, but answer overlap remains zero on the 4-example smoke. This is useful negative evidence: decoding constraints alone are not enough; generation quality likely needs prompt/template alignment, answer-span stopping, or training with a generation-facing objective.
+
 An initial internalization/query API is now available:
 
 ```bash
