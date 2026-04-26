@@ -927,6 +927,45 @@ internalized_source_gap=0.59x
 
 Lowering the learning rate continued to reduce held-out loss (`8.151770 -> 7.925923`) and improves scale512 loss-ratio to `1.68x`, close to the scale256 peak of `1.74x`. Token accuracy dropped from the i18 best checkpoint (`0.156 -> 0.109`), so scale512 now has two useful checkpoints: i18 for token accuracy and low-LR i24 for held-out loss/internalization ratio.
 
+The first scale1024 run validates the 1k-example mini-batch path. It used a 1024-example converted multi-dataset JSONL with a 768/256 split, `batch_size=32`, and a cautious 4 optimizer steps:
+
+```text
+train_examples=768
+eval_examples=256
+iters=4
+batch_size=32
+learning_rate=5e-5
+response_tokens=7073
+initial_loss=13.646152
+final_loss=11.232615
+improvement=1.21x
+initial_token_acc=0.000
+final_token_acc=0.091
+initial_eval_loss=13.606573
+final_eval_loss=11.175956
+final_eval_token_acc=0.083
+eval_improvement=1.22x
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32_optimizer.npz
+```
+
+Held-out internalization on the 256-example eval split:
+
+```text
+examples=256
+skip_examples=768
+response_tokens=2154
+base_loss=13.280730
+source_context_loss=13.387051
+internalized_loss=11.175956
+internalized_token_acc=0.083
+internalized_improvement=1.19x
+internalized_source_gap=0.83x
+```
+
+Scale1024 is currently undertrained, but it is an important systems milestone: the same MLX hypernetwork path now runs on 1k examples with best-checkpointing and optimizer saving. As with scale512, the next step should be resumable mini-batch training before interpreting quality trends.
+
 An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
 
 ```bash
