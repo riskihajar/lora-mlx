@@ -30,6 +30,30 @@ class GeneratedLoRA:
     scale: float
 
 
+def merge_generated_lora_groups(
+    generated_groups: Sequence[Sequence[GeneratedLoRA]],
+) -> list[GeneratedLoRA]:
+    if not generated_groups:
+        raise ValueError("generated_groups must not be empty")
+    if len(generated_groups) == 1:
+        return list(generated_groups[0])
+
+    merged = []
+    for lora_idx, first in enumerate(generated_groups[0]):
+        lora_as = [group[lora_idx].lora_a for group in generated_groups]
+        lora_bs = [group[lora_idx].lora_b for group in generated_groups]
+        merged.append(
+            GeneratedLoRA(
+                layer_idx=first.layer_idx,
+                module_name=first.module_name,
+                lora_a=mx.mean(mx.stack(lora_as), axis=0),
+                lora_b=mx.mean(mx.stack(lora_bs), axis=0),
+                scale=first.scale,
+            )
+        )
+    return merged
+
+
 class HashContextEncoder:
     """Small deterministic text encoder for D2L plumbing smoke tests."""
 

@@ -16,6 +16,7 @@ from lora_mlx.doc_to_lora import (
     GeneratedLoRALinear,
     TokenDocToLoRAHypernetwork,
     infer_lora_module_specs,
+    merge_generated_lora_groups,
 )
 from lora_mlx.models import Model, ModelArgs
 
@@ -26,7 +27,7 @@ class TokenExample:
     document_ids: mx.array
     prompt_ids: mx.array
     response_ids: mx.array
-    document_features: mx.array | None = None
+    document_features: mx.array | list[mx.array] | None = None
 
 
 class ToyTokenizer:
@@ -78,6 +79,12 @@ def parse_args():
         help="Use text hash, trainable token hash, frozen embeddings, or frozen layer activations.",
     )
     parser.add_argument("--context-max-tokens", type=int, default=1024)
+    parser.add_argument(
+        "--context-chunk-tokens",
+        type=int,
+        default=0,
+        help="Split model-derived context into chunks and merge generated LoRAs.",
+    )
     parser.add_argument(
         "--activation-pooling",
         choices=["mean", "latent"],
@@ -316,54 +323,89 @@ def response_token_count(examples, loss_scope: str):
 
 def generate_loras(hypernet, example):
     if example.document_features is not None:
+        if isinstance(example.document_features, list):
+            return merge_generated_lora_groups(
+                [hypernet(features) for features in example.document_features]
+            )
         return hypernet(example.document_features)
     if isinstance(hypernet, TokenDocToLoRAHypernetwork):
         return hypernet(example.document_ids)
     return hypernet.generate_from_text(example.document)
 
 
-def attach_model_embedding_features(model, examples):
+def chunk_context_ids(document_ids: mx.array, max_context_tokens: int, chunk_tokens: int):
+    if max_context_tokens > 0 and len(document_ids) > max_context_tokens:
+        document_ids = document_ids[:max_context_tokens]
+    if chunk_tokens <= 0:
+        return [document_ids]
+    return [document_ids[start : start + chunk_tokens] for start in range(0, len(document_ids), chunk_tokens)]
+
+
+def attach_model_embedding_features(model, examples, max_context_tokens: int, chunk_tokens: int):
     embed = model.model.embed_tokens
     scale = getattr(model.model, "embed_scale", 1.0)
     out = []
     for example in examples:
-        embeddings = embed(example.document_ids[None, :])[0] * scale
-        features = mx.mean(embeddings, axis=0)
+        features = []
+        for context_ids in chunk_context_ids(
+            example.document_ids,
+            max_context_tokens,
+            chunk_tokens,
+        ):
+            embeddings = embed(context_ids[None, :])[0] * scale
+            features.append(mx.mean(embeddings, axis=0))
+        document_features = features if len(features) > 1 else features[0]
         out.append(
             TokenExample(
                 document=example.document,
                 document_ids=example.document_ids,
                 prompt_ids=example.prompt_ids,
                 response_ids=example.response_ids,
-                document_features=features,
+                document_features=document_features,
             )
         )
-    mx.eval([example.document_features for example in out])
+    eval_document_features(out)
     return out
+
+
+def eval_document_features(examples):
+    features = []
+    for example in examples:
+        if isinstance(example.document_features, list):
+            features.extend(example.document_features)
+        elif example.document_features is not None:
+            features.append(example.document_features)
+    mx.eval(features)
 
 
 def attach_model_activation_features(
     model,
     examples,
     max_context_tokens: int,
+    chunk_tokens: int,
     activation_pooling: str,
 ):
     out = []
     for example in examples:
-        context_ids = example.document_ids
-        if max_context_tokens > 0 and len(context_ids) > max_context_tokens:
-            context_ids = context_ids[:max_context_tokens]
-        features = extract_layer_activation_feature(model, context_ids, activation_pooling)
+        features = [
+            extract_layer_activation_feature(model, context_ids, activation_pooling)
+            for context_ids in chunk_context_ids(
+                example.document_ids,
+                max_context_tokens,
+                chunk_tokens,
+            )
+        ]
+        document_features = features if len(features) > 1 else features[0]
         out.append(
             TokenExample(
                 document=example.document,
                 document_ids=example.document_ids,
                 prompt_ids=example.prompt_ids,
                 response_ids=example.response_ids,
-                document_features=features,
+                document_features=document_features,
             )
         )
-    mx.eval([example.document_features for example in out])
+    eval_document_features(out)
     return out
 
 
@@ -464,12 +506,18 @@ def main():
         )
     examples = build_examples(tokenizer, args)
     if args.context_encoder == "model-embed":
-        examples = attach_model_embedding_features(model, examples)
+        examples = attach_model_embedding_features(
+            model,
+            examples,
+            args.context_max_tokens,
+            args.context_chunk_tokens,
+        )
     if args.context_encoder == "model-activations":
         examples = attach_model_activation_features(
             model,
             examples,
             args.context_max_tokens,
+            args.context_chunk_tokens,
             args.activation_pooling,
         )
     eval_examples = []
@@ -520,6 +568,7 @@ def main():
     print(f"context_encoder={args.context_encoder}")
     print(f"context_latents={args.context_latents}")
     print(f"context_max_tokens={args.context_max_tokens}")
+    print(f"context_chunk_tokens={args.context_chunk_tokens}")
     print(f"activation_pooling={args.activation_pooling}")
     print(f"activation_latents={args.activation_latents}")
     print(f"spec_conditioning={args.spec_conditioning}")

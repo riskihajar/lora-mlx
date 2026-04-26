@@ -325,6 +325,57 @@ per_layer_processing=True
 
 The latent activation aggregator is structurally closer to SakanaAI, but on the current tiny sample it underperforms simpler mean-pooled activation features. It should be treated as a parity building block, not the current best small-sample setting.
 
+Chunked context support has been added with `--context-chunk-tokens`. For model-derived context modes, the script now extracts one context feature per chunk, generates one LoRA group per chunk, and merges the generated LoRAs by averaging matching A/B matrices. This is a simple version of SakanaAI's chunked context plus LoRA merger path, not a learned merger yet. Validated `model-embed` output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=2e-4
+response_tokens=52
+initial_loss=13.441004
+final_loss=4.768547
+improvement=2.82x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=14.375244
+final_eval_loss=5.312313
+final_eval_token_acc=0.200
+eval_improvement=2.71x
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+per_rank_gen=True
+per_layer_processing=True
+```
+
+Validated chunked `model-activations` output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=1e-4
+response_tokens=52
+initial_loss=13.653996
+final_loss=5.856358
+improvement=2.33x
+initial_token_acc=0.000
+final_token_acc=0.058
+initial_eval_loss=14.300089
+final_eval_loss=6.213915
+final_eval_token_acc=0.200
+eval_improvement=2.30x
+context_encoder=model-activations
+context_max_tokens=512
+context_chunk_tokens=128
+activation_pooling=mean
+per_rank_gen=True
+per_layer_processing=True
+```
+
+The chunked embedding path slightly improved the tiny held-out result compared with non-chunked model embeddings (`2.71x` vs `2.69x`). The chunked activation path remained structurally useful but below simpler embedding features on this small run.
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text
