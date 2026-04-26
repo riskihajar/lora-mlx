@@ -659,6 +659,15 @@ chunk_merge=learned
 
 This evaluator reproduces the checkpoint reload metrics exactly and gives a cleaner end-to-end Doc-to-LoRA metric: document internalization happens before evaluation, while the answer prompt itself contains no source context. The baseline comparison shows generated LoRA internalization improves no-source-context Gemma over the base model (`1.76x` on all 64 examples, `1.53x` on the held-out 16-example split), even though exact-match generation remains unsolved.
 
+The end-to-end internalization evaluator can be reproduced with:
+
+```bash
+scripts/eval_doc_to_lora_sakana_gemma_scale64_internalization.sh heldout
+scripts/eval_doc_to_lora_sakana_gemma_scale64_internalization.sh full
+```
+
+The `heldout` mode evaluates the last 16 examples from `data/doc_to_lora/sakana_gemma_multi_64.jsonl`; `full` evaluates all 64 examples. Both modes compare base Gemma against generated-LoRA internalization using the saved `outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz` checkpoint.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
