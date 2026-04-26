@@ -88,6 +88,13 @@ def parse_args():
         help="Split model-derived context into chunks and merge generated LoRAs.",
     )
     parser.add_argument(
+        "--chunk-merge",
+        choices=["mean", "learned"],
+        default="mean",
+        help="Merge chunk-generated LoRAs by averaging or learned per-target weights.",
+    )
+    parser.add_argument("--max-context-chunks", type=int, default=8)
+    parser.add_argument(
         "--activation-pooling",
         choices=["mean", "latent"],
         default="mean",
@@ -369,9 +376,10 @@ def response_token_count(examples, loss_scope: str):
 def generate_loras(hypernet, example):
     if example.document_features is not None:
         if isinstance(example.document_features, list):
-            return merge_generated_lora_groups(
-                [hypernet(features) for features in example.document_features]
-            )
+            generated_groups = [hypernet(features) for features in example.document_features]
+            if hasattr(hypernet, "merge_generated_lora_groups"):
+                return hypernet.merge_generated_lora_groups(generated_groups)
+            return merge_generated_lora_groups(generated_groups)
         return hypernet(example.document_features)
     if isinstance(hypernet, TokenDocToLoRAHypernetwork):
         return hypernet(example.document_ids)
@@ -552,6 +560,8 @@ def main():
                 and args.activation_pooling == "latent"
                 else 0
             ),
+            chunk_merge=args.chunk_merge,
+            max_context_chunks=args.max_context_chunks,
         )
     examples = build_examples(tokenizer, args)
     if args.context_encoder == "model-embed":
@@ -619,6 +629,8 @@ def main():
     print(f"context_latents={args.context_latents}")
     print(f"context_max_tokens={args.context_max_tokens}")
     print(f"context_chunk_tokens={args.context_chunk_tokens}")
+    print(f"chunk_merge={args.chunk_merge}")
+    print(f"max_context_chunks={args.max_context_chunks}")
     print(f"activation_pooling={args.activation_pooling}")
     print(f"activation_latents={args.activation_latents}")
     print(f"spec_conditioning={args.spec_conditioning}")

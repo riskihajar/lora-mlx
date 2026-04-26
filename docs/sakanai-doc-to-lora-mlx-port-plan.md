@@ -376,6 +376,58 @@ per_layer_processing=True
 
 The chunked embedding path slightly improved the tiny held-out result compared with non-chunked model embeddings (`2.71x` vs `2.69x`). The chunked activation path remained structurally useful but below simpler embedding features on this small run.
 
+Chunked context now also supports `--chunk-merge learned`, which adds trainable per-target chunk weights inside the hypernetwork and merges matching generated LoRA A/B matrices with a learned softmax over chunks. This is a closer structural match to SakanaAI's learned LoRA merger than the earlier mean merge. On the 4-train/1-eval smoke run, learned merge matches mean merge because the initial uniform weighting is already strong and the sample is tiny:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=2e-4
+response_tokens=52
+initial_loss=13.441004
+final_loss=4.767913
+improvement=2.82x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=14.375244
+final_eval_loss=5.312351
+final_eval_token_acc=0.200
+eval_improvement=2.71x
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+```
+
+A larger local run over all 16 converted Sakana examples produced strong train improvement but weaker held-out improvement, showing that the 4/1 split was optimistic:
+
+```text
+train_examples=12
+eval_examples=4
+iters=20
+learning_rate=2e-4
+response_tokens=95
+initial_loss=13.630783
+final_loss=4.887667
+improvement=2.79x
+initial_token_acc=0.000
+final_token_acc=0.126
+initial_eval_loss=13.543205
+final_eval_loss=8.429949
+final_eval_token_acc=0.085
+eval_improvement=1.61x
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+```
+
+Mean merge on the same 12/4 split was effectively identical (`final_eval_loss=8.424996`, `eval_improvement=1.61x`), so learned merger is currently a parity feature rather than a measured small-sample gain. The important progress is that chunk-level LoRA merging is now trainable and differentiable.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text

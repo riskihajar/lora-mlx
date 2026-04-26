@@ -95,6 +95,8 @@ class DocToLoRAHypernetwork(nn.Module):
         per_layer_processing: bool = False,
         num_pre_head_layers: int = 1,
         activation_latents: int = 0,
+        chunk_merge: str = "mean",
+        max_context_chunks: int = 8,
     ):
         super().__init__()
         if not module_specs:
@@ -108,6 +110,7 @@ class DocToLoRAHypernetwork(nn.Module):
         self.per_rank_gen = per_rank_gen
         self.per_layer_processing = per_layer_processing
         self.activation_latents = activation_latents
+        self.chunk_merge = chunk_merge
         self.encoder = HashContextEncoder(feature_size)
         self.proj = nn.Linear(feature_size, hidden_size)
         self.activation_latent_queries = None
@@ -135,6 +138,11 @@ class DocToLoRAHypernetwork(nn.Module):
         self.rank_embeddings = None
         if per_rank_gen:
             self.rank_embeddings = mx.random.normal((rank, hidden_size)) * 0.02
+        self.chunk_merge_logits = None
+        if chunk_merge == "learned":
+            if max_context_chunks <= 0:
+                raise ValueError("max_context_chunks must be positive for learned chunk merge")
+            self.chunk_merge_logits = mx.zeros((len(self.module_specs), max_context_chunks))
         self.a_heads = [
             nn.Linear(
                 hidden_size,
@@ -216,6 +224,39 @@ class DocToLoRAHypernetwork(nn.Module):
             latents = weights @ v
             pooled.append(self.activation_norm(self.activation_out_proj(latents.reshape(-1))))
         return mx.stack(pooled)
+
+    def merge_generated_lora_groups(
+        self,
+        generated_groups: Sequence[Sequence[GeneratedLoRA]],
+    ) -> list[GeneratedLoRA]:
+        if self.chunk_merge_logits is None:
+            return merge_generated_lora_groups(generated_groups)
+        if not generated_groups:
+            raise ValueError("generated_groups must not be empty")
+        if len(generated_groups) == 1:
+            return list(generated_groups[0])
+        if len(generated_groups) > self.chunk_merge_logits.shape[1]:
+            raise ValueError("number of context chunks exceeds max_context_chunks")
+
+        merged = []
+        chunk_count = len(generated_groups)
+        for lora_idx, first in enumerate(generated_groups[0]):
+            weights = mx.softmax(
+                self.chunk_merge_logits[lora_idx, :chunk_count],
+                axis=0,
+            )
+            lora_as = mx.stack([group[lora_idx].lora_a for group in generated_groups])
+            lora_bs = mx.stack([group[lora_idx].lora_b for group in generated_groups])
+            merged.append(
+                GeneratedLoRA(
+                    layer_idx=first.layer_idx,
+                    module_name=first.module_name,
+                    lora_a=mx.sum(lora_as * weights[:, None, None], axis=0),
+                    lora_b=mx.sum(lora_bs * weights[:, None, None], axis=0),
+                    scale=first.scale,
+                )
+            )
+        return merged
 
     def generate_from_text(self, text: str) -> list[GeneratedLoRA]:
         return self(self.encode_text(text))
@@ -306,6 +347,8 @@ class TokenDocToLoRAHypernetwork(nn.Module):
             per_layer_processing=per_layer_processing,
             num_pre_head_layers=num_pre_head_layers,
             activation_latents=0,
+            chunk_merge="mean",
+            max_context_chunks=1,
         )
 
     def __call__(self, context_ids: mx.array) -> list[GeneratedLoRA]:
