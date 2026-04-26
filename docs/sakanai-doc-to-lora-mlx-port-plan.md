@@ -866,6 +866,41 @@ saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5
 
 This makes the scale256 comparison more balanced on step count. Generated-LoRA still has lower held-out loss (`7.571906` vs `8.269709`) and higher loss-ratio improvement against the base (`1.74x` vs approximately `1.59x` when comparing the ordinary-LoRA `i8` loss against the same held-out base loss `13.168523`). Ordinary LoRA reaches similar token accuracy (`0.154` vs `0.151`), so the current result should be reported as competitive rather than one-sided: generated-LoRA is better on held-out loss, ordinary LoRA catches up on token-level accuracy after additional mini-batch updates.
 
+A small generation-quality evaluator is available for direct free-generation checks:
+
+```bash
+PYTHONPATH=src python3 scripts/eval_sakana_generation_quality.py \
+  --mode generated \
+  --model mlx-community/gemma-2-2b-it \
+  --hypernet outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5_best.npz \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_multi_256.jsonl \
+  --skip-examples 192 \
+  --max-examples 4 \
+  --max-new-tokens 24
+
+PYTHONPATH=src python3 scripts/eval_sakana_generation_quality.py \
+  --mode ordinary \
+  --model mlx-community/gemma-2-2b-it \
+  --ordinary-adapter outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i8_best.npz \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_multi_256.jsonl \
+  --skip-examples 192 \
+  --max-examples 4 \
+  --max-new-tokens 24
+```
+
+Initial free-generation results on 4 held-out scale256 examples are still poor despite the teacher-forced gains:
+
+```text
+base_mean_f1=0.000000
+base_exact_acc=0.000000
+generated_lora_mean_f1=0.000000
+generated_lora_exact_acc=0.000000
+ordinary_lora_i8_mean_f1=0.017857
+ordinary_lora_i8_exact_acc=0.000000
+```
+
+Qualitatively, the base model repeats non-answer fragments, while generated-LoRA and ordinary-LoRA often collapse to whitespace-like greedy outputs on the sampled examples. This confirms the current strongest evidence is teacher-forced internalization, not usable answer generation. The next generation-facing work should improve prompt formatting/decoding and evaluate more examples before making any natural-answer quality claim.
+
 An initial internalization/query API is now available:
 
 ```bash
