@@ -760,6 +760,28 @@ internalized_source_gap=0.66x
 
 Scale256 is now the largest validated MLX Doc-to-LoRA run in this repo. Its held-out internalization improves over both scale64 and scale128 (`1.74x` vs `1.53x` and `1.44x`), with higher held-out token accuracy (`0.151`). The all-example aggregate remains similar to scale128 because train examples are harder/longer in aggregate, but the held-out result suggests the stable `model-embed + chunked learned merge + per-rank/per-layer` path scales positively to 256 examples.
 
+An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
+
+```bash
+PYTHONPATH=src python3 scripts/train_sakana_ordinary_lora_baseline.py \
+  --model mlx-community/gemma-2-2b-it \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_multi_256.jsonl \
+  --max-examples 256 \
+  --eval-examples 64 \
+  --iters 8 \
+  --batch-size 8 \
+  --lora-layers 2 \
+  --target-modules down_proj \
+  --max-specs 2 \
+  --rank 4 \
+  --loss-scope full-answer \
+  --learning-rate 5e-5 \
+  --save-adapter outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5.npz \
+  --save-best-adapter outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_best.npz
+```
+
+The baseline must use mini-batches. A first full-split implementation attempted to backpropagate through all 192 training examples in one MLX graph and was too memory-heavy for the local machine. The current script defaults to `--batch-size 8` and a tiny safety smoke (`16` total examples, `4` eval examples, `batch_size=2`, `1` iteration) completed successfully with `initial_loss=13.235734`, `final_loss=13.171252`, and `final_eval_loss=13.365139`. Run larger baselines gradually (`batch_size=2` or `4` first) before attempting the full scale256 comparison.
+
 An initial internalization/query API is now available:
 
 ```bash
