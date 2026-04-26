@@ -813,6 +813,43 @@ internalized_source_gap=0.69x
 
 Scale512 is now the largest validated MLX Doc-to-LoRA run in this repo. It validates mini-batch hypernetwork training, best-checkpointing, optimizer saving, and held-out internalization on 512 examples. Its held-out improvement is positive but lower than the scale256 peak (`1.44x` vs `1.74x`), so the next scale512 work should likely resume for more mini-batch steps rather than changing architecture immediately.
 
+The scale512 run was resumed from the final hypernetwork and optimizer state for 6 additional mini-batch steps, giving an approximately 12-step run:
+
+```text
+loaded_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32.npz
+loaded_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_optimizer.npz
+additional_iters=6
+batch_size=32
+train_examples=384
+eval_examples=128
+initial_loss=9.171760
+final_loss=8.378478
+improvement=1.09x
+initial_eval_loss=9.204689
+final_eval_loss=8.486353
+final_eval_token_acc=0.109
+eval_improvement=1.08x
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i12.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i12_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i12_optimizer.npz
+```
+
+Held-out internalization after resume:
+
+```text
+examples=128
+skip_examples=384
+response_tokens=1176
+base_loss=13.282986
+source_context_loss=13.401104
+internalized_loss=8.486353
+internalized_token_acc=0.109
+internalized_improvement=1.57x
+internalized_source_gap=0.63x
+```
+
+Resuming scale512 improves held-out internalization from `1.44x` to `1.57x`, passing scale64 and scale128 while still below the scale256 peak (`1.74x`). This supports continuing with resumable mini-batch training for larger runs; more steps may be more useful than another architecture change at this stage.
+
 An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
 
 ```bash
