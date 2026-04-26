@@ -494,6 +494,35 @@ per_layer_processing=True
 
 The scaled run confirms the MLX Doc-to-LoRA pipeline now handles multi-dataset Sakana samples and larger eval splits. It also shows the remaining bottleneck is generalization: train loss improves consistently, but held-out improvement is much smaller on 8 eval examples than on the earlier 1-example smoke split.
 
+The token smoke trainer now supports hypernetwork checkpoints with `--save-hypernet` and `--load-hypernet`. Checkpoints save the trainable hypernetwork weights as MLX `.npz` files, including learned merger weights when enabled. Optimizer state is not persisted yet, so loaded runs resume from the saved hypernetwork parameters with a fresh optimizer. Validated toy checkpoint restore reproduced the saved loss exactly:
+
+```text
+saved_hypernet=/tmp/lora_mlx_hypernet_toy.npz
+loaded_hypernet=/tmp/lora_mlx_hypernet_toy.npz
+initial_loss=2.618373
+final_loss=2.618373
+initial_token_acc=0.500
+final_token_acc=0.500
+```
+
+Validated Gemma checkpoint restore with chunked model embeddings and learned chunk merge also reproduced the saved metrics:
+
+```text
+saved_hypernet=/tmp/lora_mlx_hypernet_gemma_smoke.npz
+loaded_hypernet=/tmp/lora_mlx_hypernet_gemma_smoke.npz
+initial_loss=12.685263
+final_loss=12.685263
+initial_eval_loss=14.242848
+final_eval_loss=14.242848
+context_encoder=model-embed
+context_chunk_tokens=64
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+```
+
+This enables longer multi-dataset runs to be saved and inspected, even before full optimizer-state resume is implemented.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text

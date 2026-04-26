@@ -9,6 +9,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 import numpy as np
+from mlx.utils import tree_flatten
 
 from lora_mlx import utils as lora_utils
 from lora_mlx.doc_to_lora import (
@@ -137,6 +138,16 @@ def parse_args():
         "--target-token-prefix",
         default="the",
         help="Tokenizer token used as the first synthetic target; later docs offset from it.",
+    )
+    parser.add_argument(
+        "--save-hypernet",
+        default=None,
+        help="Optional path to save final hypernetwork weights as an MLX npz checkpoint.",
+    )
+    parser.add_argument(
+        "--load-hypernet",
+        default=None,
+        help="Optional path to load hypernetwork weights before training/eval.",
     )
     return parser.parse_args()
 
@@ -563,6 +574,10 @@ def main():
             chunk_merge=args.chunk_merge,
             max_context_chunks=args.max_context_chunks,
         )
+    if args.load_hypernet:
+        hypernet.load_weights(args.load_hypernet, strict=False)
+        mx.eval(hypernet.parameters())
+        print(f"loaded_hypernet={args.load_hypernet}")
     examples = build_examples(tokenizer, args)
     if args.context_encoder == "model-embed":
         examples = attach_model_embedding_features(
@@ -639,8 +654,13 @@ def main():
     print(f"num_pre_head_layers={args.num_pre_head_layers}")
     print(f"train_examples={len(examples)}")
     print(f"eval_examples={len(eval_examples)}")
+    if args.save_hypernet:
+        save_path = Path(args.save_hypernet)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        mx.savez(str(save_path), **dict(tree_flatten(hypernet.parameters())))
+        print(f"saved_hypernet={save_path}")
 
-    if final_loss >= initial_loss and final_acc <= initial_acc:
+    if args.iters > 0 and final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")
 
 
