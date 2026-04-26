@@ -782,6 +782,27 @@ PYTHONPATH=src python3 scripts/train_sakana_ordinary_lora_baseline.py \
 
 The baseline must use mini-batches. A first full-split implementation attempted to backpropagate through all 192 training examples in one MLX graph and was too memory-heavy for the local machine. The current script defaults to `--batch-size 8` and a tiny safety smoke (`16` total examples, `4` eval examples, `batch_size=2`, `1` iteration) completed successfully with `initial_loss=13.235734`, `final_loss=13.171252`, and `final_eval_loss=13.365139`. Run larger baselines gradually (`batch_size=2` or `4` first) before attempting the full scale256 comparison.
 
+A safe ordinary-LoRA scale64 baseline completed with `batch_size=2`, `48` train examples, and `16` eval examples:
+
+```text
+iters=4
+batch_size=2
+train_examples=48
+eval_examples=16
+initial_loss=13.323399
+final_loss=11.916827
+improvement=1.12x
+initial_eval_loss=13.308684
+source_context_eval_loss=13.419864
+final_eval_loss=12.041792
+final_eval_token_acc=0.005
+eval_improvement=1.11x
+saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi64_downproj_lr5e5_b2.npz
+saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi64_downproj_lr5e5_b2_best.npz
+```
+
+This ordinary-LoRA baseline is intentionally conservative and not yet tuned, but it gives the first apple-to-apple comparator on the same Gemma/Sakana split and LoRA target budget (`down_proj`, last 2 layers, first 2 specs, rank 4). Under these settings, the generated-LoRA internalization result remains stronger on the same held-out scale64 split (`1.53x` vs `1.11x` improvement; `0.079` vs `0.005` token accuracy).
+
 An initial internalization/query API is now available:
 
 ```bash
