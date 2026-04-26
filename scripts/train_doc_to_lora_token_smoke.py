@@ -145,6 +145,17 @@ def parse_args():
         help="Optional path to save final hypernetwork weights as an MLX npz checkpoint.",
     )
     parser.add_argument(
+        "--save-best-hypernet",
+        default=None,
+        help="Optional path to save the best hypernetwork checkpoint by eval loss.",
+    )
+    parser.add_argument(
+        "--eval-every",
+        type=int,
+        default=0,
+        help="When saving best checkpoints, evaluate every N training steps.",
+    )
+    parser.add_argument(
         "--load-hypernet",
         default=None,
         help="Optional path to load hypernetwork weights before training/eval.",
@@ -554,6 +565,18 @@ def save_hypernet_config(
     hypernet_config_path(checkpoint_path).write_text(json.dumps(config, indent=2))
 
 
+def save_hypernet_checkpoint(
+    hypernet,
+    checkpoint_path: Path,
+    args,
+    target_modules: list[str],
+    num_specs: int,
+) -> None:
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    mx.savez(str(checkpoint_path), **dict(tree_flatten(hypernet.parameters())))
+    save_hypernet_config(checkpoint_path, args, target_modules, num_specs)
+
+
 def main():
     args = parse_args()
     np.random.seed(args.seed)
@@ -646,12 +669,32 @@ def main():
     initial_acc = accuracy(model, hypernet, examples, args.loss_scope)
     initial_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
     initial_eval = metrics(model, hypernet, eval_examples, args.loss_scope, args.loss_type)
+    best_eval_loss = initial_eval["loss"] if initial_eval is not None else math.inf
+    saved_best_hypernet = None
+    if args.save_best_hypernet and initial_eval is not None:
+        best_path = Path(args.save_best_hypernet)
+        save_hypernet_checkpoint(hypernet, best_path, args, target_modules, len(specs))
+        saved_best_hypernet = best_path
     for step in range(args.iters):
         loss_value, grads = loss_and_grad(hypernet)
         optimizer.update(hypernet, grads)
         mx.eval(hypernet.parameters(), optimizer.state, loss_value)
         if step == 0 or (step + 1) % max(args.iters // 4, 1) == 0:
             print(f"iter {step + 1}: loss={loss_value.item():.6f}")
+        if (
+            args.save_best_hypernet
+            and eval_examples
+            and args.eval_every > 0
+            and (step + 1) % args.eval_every == 0
+        ):
+            step_eval = metrics(model, hypernet, eval_examples, args.loss_scope, args.loss_type)
+            print(f"iter {step + 1}: eval_loss={step_eval['loss']:.6f}")
+            if step_eval["loss"] < best_eval_loss:
+                best_eval_loss = step_eval["loss"]
+                best_path = Path(args.save_best_hypernet)
+                save_hypernet_checkpoint(hypernet, best_path, args, target_modules, len(specs))
+                saved_best_hypernet = best_path
+                print(f"iter {step + 1}: saved_best_hypernet={best_path}")
 
     final_loss = loss_fn(hypernet).item()
     if math.isnan(final_loss):
@@ -659,6 +702,11 @@ def main():
     final_acc = accuracy(model, hypernet, examples, args.loss_scope)
     final_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
     final_eval = metrics(model, hypernet, eval_examples, args.loss_scope, args.loss_type)
+    if args.save_best_hypernet and final_eval is not None and final_eval["loss"] < best_eval_loss:
+        best_eval_loss = final_eval["loss"]
+        best_path = Path(args.save_best_hypernet)
+        save_hypernet_checkpoint(hypernet, best_path, args, target_modules, len(specs))
+        saved_best_hypernet = best_path
     improvement = initial_loss / final_loss if final_loss > 0 else math.inf
     print(f"initial_loss={initial_loss:.6f}")
     print(f"final_loss={final_loss:.6f}")
@@ -693,11 +741,13 @@ def main():
     print(f"eval_examples={len(eval_examples)}")
     if args.save_hypernet:
         save_path = Path(args.save_hypernet)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        mx.savez(str(save_path), **dict(tree_flatten(hypernet.parameters())))
-        save_hypernet_config(save_path, args, target_modules, len(specs))
+        save_hypernet_checkpoint(hypernet, save_path, args, target_modules, len(specs))
         print(f"saved_hypernet={save_path}")
         print(f"saved_hypernet_config={hypernet_config_path(save_path)}")
+    if saved_best_hypernet is not None:
+        print(f"best_eval_loss={best_eval_loss:.6f}")
+        print(f"saved_best_hypernet={saved_best_hypernet}")
+        print(f"saved_best_hypernet_config={hypernet_config_path(saved_best_hypernet)}")
 
     if args.iters > 0 and final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")

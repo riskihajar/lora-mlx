@@ -614,6 +614,17 @@ outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz.json
 
 Validation confirmed both evaluator and internalizer load the sidecar and reproduce the held-out internalization metrics.
 
+Training now also supports best-checkpointing by eval loss:
+
+```bash
+PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  ... \
+  --eval-every 8 \
+  --save-best-hypernet outputs/doc_to_lora/best_hypernet.npz
+```
+
+When eval examples are present, the script evaluates every `--eval-every` steps, saves the lowest-eval-loss hypernetwork checkpoint, and writes the matching sidecar config. A toy validation saved `best_eval_loss=4.031863` at step 2 and reloaded the checkpoint with the same eval loss, confirming best-checkpoint restore works.
+
 An initial internalization/query API is now available:
 
 ```bash
