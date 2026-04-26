@@ -118,18 +118,27 @@ class DocToLoRAHypernetwork(nn.Module):
         return self.encoder(text)
 
     def __call__(self, context_features: mx.array) -> list[GeneratedLoRA]:
+        per_layer_features = False
         if len(context_features.shape) == 1:
             context_features = context_features[None, :]
-        if context_features.shape[0] != 1:
-            raise ValueError("only batch size 1 is supported by the initial D2L skeleton")
+        elif len(context_features.shape) == 2 and context_features.shape[0] > 1:
+            per_layer_features = True
+        if len(context_features.shape) != 2:
+            raise ValueError("context_features must be a vector or per-layer matrix")
 
-        hidden = nn.silu(self.proj(context_features))[0]
+        hidden = nn.silu(self.proj(context_features))
+        if not per_layer_features:
+            hidden = hidden[0]
         generated = []
         init_scale = 1 / math.sqrt(hidden.shape[-1])
         for idx, (spec, a_head, b_head) in enumerate(
             zip(self.module_specs, self.a_heads, self.b_heads)
         ):
-            spec_hidden = hidden
+            if per_layer_features:
+                layer_idx = min(spec.layer_idx, hidden.shape[0] - 1)
+                spec_hidden = hidden[layer_idx]
+            else:
+                spec_hidden = hidden
             if self.spec_embeddings is not None:
                 spec_hidden = spec_hidden + self.spec_embeddings[idx]
             if self.layer_embeddings is not None:

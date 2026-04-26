@@ -366,7 +366,7 @@ def extract_layer_activation_feature(model, input_ids):
     for layer in model.model.layers:
         h, _ = layer(h, mask, None)
         layer_features.append(mx.mean(h[0], axis=0))
-    return mx.mean(mx.stack(layer_features), axis=0)
+    return mx.stack(layer_features)
 
 
 def metrics(model, hypernet, examples, loss_scope: str):
