@@ -2,6 +2,7 @@
 import argparse
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,8 +19,44 @@ from lora_mlx.doc_to_lora import (
 from lora_mlx.models import LoRALinear
 
 
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "be",
+    "been",
+    "by",
+    "for",
+    "from",
+    "had",
+    "has",
+    "he",
+    "in",
+    "is",
+    "it",
+    "its",
+    "of",
+    "on",
+    "or",
+    "see",
+    "some",
+    "that",
+    "the",
+    "their",
+    "this",
+    "to",
+    "was",
+    "were",
+    "where",
+    "with",
+}
+
+
 @dataclass(frozen=True)
 class RescoringExample:
+    document: str
     document_ids: mx.array
     prompt_ids: mx.array
     response: str
@@ -36,6 +73,17 @@ def parse_args():
     parser.add_argument("--skip-examples", type=int, default=0)
     parser.add_argument("--max-examples", type=int, default=16)
     parser.add_argument("--num-candidates", type=int, default=8)
+    parser.add_argument(
+        "--candidate-source",
+        choices=["responses", "doc-spans", "mixed"],
+        default="responses",
+        help="Use held-out responses, document spans, or both as distractor candidates.",
+    )
+    parser.add_argument(
+        "--allow-stopword-spans",
+        action="store_true",
+        help="Keep single-token stopword document spans as candidates.",
+    )
     parser.add_argument("--hypernet", default=None)
     parser.add_argument("--ordinary-adapter", default=None)
     parser.add_argument("--hidden-size", type=int, default=128)
@@ -106,6 +154,7 @@ def load_examples(tokenizer, path: str, skip_examples: int, max_examples: int):
                 continue
             examples.append(
                 RescoringExample(
+                    document=document,
                     document_ids=mx.array(tokenizer.encode(document), dtype=mx.int32),
                     prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
                     response=response,
@@ -219,20 +268,90 @@ def candidate_loss(model, prompt_ids: mx.array, response_ids: mx.array):
     return nn.losses.cross_entropy(logits, response_ids.astype(mx.int32)).mean().item()
 
 
-def build_candidate_sets(examples: list[RescoringExample], num_candidates: int):
+def normalize_answer(text: str):
+    return " ".join(re.findall(r"\w+", text.lower()))
+
+
+def add_unique(candidates: list[str], seen: set[str], candidate: str):
+    candidate = candidate.strip()
+    key = normalize_answer(candidate)
+    if not candidate or not key or key in seen:
+        return
+    candidates.append(candidate)
+    seen.add(key)
+
+
+def document_span_candidates(
+    example: RescoringExample,
+    max_candidates: int,
+    allow_stopword_spans: bool,
+):
+    cleaned = example.document.replace("user", " ").replace("model", " ")
+    words = re.findall(r"[A-Za-z][A-Za-z0-9'-]*", cleaned)
+    gold_len = max(1, len(normalize_answer(example.response).split()))
+    ngram_lengths = sorted({gold_len, max(1, gold_len - 1), gold_len + 1})
+    candidates = []
+    seen = set()
+    add_unique(candidates, seen, example.response)
+    for ngram_len in ngram_lengths:
+        for start in range(0, max(len(words) - ngram_len + 1, 0)):
+            text = " ".join(words[start : start + ngram_len])
+            if len(text) < 3:
+                continue
+            if (
+                not allow_stopword_spans
+                and ngram_len == 1
+                and text.lower() in STOPWORDS
+            ):
+                continue
+            add_unique(candidates, seen, text)
+            if len(candidates) >= max_candidates:
+                return candidates
+    return candidates
+
+
+def response_candidates(examples: list[RescoringExample], idx: int, max_candidates: int):
     all_responses = []
     for example in examples:
         if example.response not in all_responses:
             all_responses.append(example.response)
+    example = examples[idx]
+    candidates = []
+    seen = set()
+    add_unique(candidates, seen, example.response)
+    cursor = 1
+    while len(candidates) < min(max_candidates, len(all_responses)):
+        candidate = all_responses[(idx + cursor) % len(all_responses)]
+        cursor += 1
+        add_unique(candidates, seen, candidate)
+    return candidates
+
+
+def build_candidate_sets(
+    examples: list[RescoringExample],
+    num_candidates: int,
+    source: str,
+    allow_stopword_spans: bool,
+):
     candidate_sets = []
     for idx, example in enumerate(examples):
-        candidates = [example.response]
-        cursor = 1
-        while len(candidates) < min(num_candidates, len(all_responses)):
-            candidate = all_responses[(idx + cursor) % len(all_responses)]
-            cursor += 1
-            if candidate not in candidates:
-                candidates.append(candidate)
+        if source == "responses":
+            candidates = response_candidates(examples, idx, num_candidates)
+        elif source == "doc-spans":
+            candidates = document_span_candidates(example, num_candidates, allow_stopword_spans)
+        else:
+            candidates = []
+            seen = set()
+            for candidate in document_span_candidates(
+                example,
+                num_candidates,
+                allow_stopword_spans,
+            ):
+                add_unique(candidates, seen, candidate)
+            for candidate in response_candidates(examples, idx, num_candidates):
+                add_unique(candidates, seen, candidate)
+                if len(candidates) >= num_candidates:
+                    break
         candidate_sets.append(candidates)
     return candidate_sets
 
@@ -282,12 +401,19 @@ def main():
     else:
         mx.eval(model.parameters())
     examples = load_examples(tokenizer, args.dataset_jsonl, args.skip_examples, args.max_examples)
-    candidate_sets = build_candidate_sets(examples, args.num_candidates)
+    candidate_sets = build_candidate_sets(
+        examples,
+        args.num_candidates,
+        args.candidate_source,
+        args.allow_stopword_spans,
+    )
     metrics = evaluate(model, tokenizer, hypernet, examples, candidate_sets, args)
     print(f"mode={args.mode}")
     print(f"examples={len(examples)}")
     print(f"skip_examples={args.skip_examples}")
     print(f"num_candidates={min(args.num_candidates, len(examples))}")
+    print(f"candidate_source={args.candidate_source}")
+    print(f"allow_stopword_spans={args.allow_stopword_spans}")
     print(f"top1_acc={metrics['top1_acc']:.6f}")
     print(f"mean_rank={metrics['mean_rank']:.6f}")
     print(f"mrr={metrics['mrr']:.6f}")

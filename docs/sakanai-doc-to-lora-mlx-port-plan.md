@@ -970,6 +970,41 @@ ordinary_lora_i8_mean_margin=-1.102155
 
 This is a mixed diagnostic result. Generated-LoRA substantially reduces the negative gold-vs-best-wrong margin, which means it moves the gold answer closer to the best distractor under candidate likelihood. However, it does not yet rank the gold answer top-1 on this small slice. Candidate rescoring therefore confirms the same broad generation gap: teacher-forced internalization improves, but answer selection/generation still needs a stronger inference method or training objective.
 
+The rescoring evaluator also supports document-span candidates:
+
+```bash
+PYTHONPATH=src python3 scripts/eval_sakana_answer_rescoring.py \
+  --mode generated \
+  --model mlx-community/gemma-2-2b-it \
+  --hypernet outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5_best.npz \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_multi_256.jsonl \
+  --skip-examples 192 \
+  --max-examples 8 \
+  --num-candidates 8 \
+  --candidate-source doc-spans
+```
+
+This mode builds distractors from same-document n-grams with a small stopword filter. Initial 8-example results remain weak:
+
+```text
+base_docspan_top1_acc=0.250000
+base_docspan_mean_rank=4.125000
+base_docspan_mrr=0.433482
+base_docspan_mean_margin=-0.810603
+
+generated_lora_docspan_top1_acc=0.000000
+generated_lora_docspan_mean_rank=6.000000
+generated_lora_docspan_mrr=0.179464
+generated_lora_docspan_mean_margin=-0.800128
+
+ordinary_lora_i8_docspan_top1_acc=0.125000
+ordinary_lora_i8_docspan_mean_rank=5.750000
+ordinary_lora_i8_docspan_mrr=0.275000
+ordinary_lora_i8_docspan_mean_margin=-0.726336
+```
+
+The doc-span candidate source is useful for tooling but not yet a better metric: candidates such as `noticed` can beat the gold answer because they are common continuation tokens under the prompt. This reinforces that answer selection needs better candidate normalization/type filtering or a discriminative scoring objective, rather than raw average token likelihood alone.
+
 An initial internalization/query API is now available:
 
 ```bash
