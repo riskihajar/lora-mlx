@@ -78,6 +78,13 @@ def parse_args():
         help="Use text hash, trainable token hash, frozen embeddings, or frozen layer activations.",
     )
     parser.add_argument("--context-max-tokens", type=int, default=1024)
+    parser.add_argument(
+        "--activation-pooling",
+        choices=["mean", "latent"],
+        default="mean",
+        help="Pool frozen layer activations by token mean or trainable latent attention.",
+    )
+    parser.add_argument("--activation-latents", type=int, default=4)
     parser.add_argument("--rank", type=int, default=4)
     parser.add_argument("--lora-layers", type=int, default=1)
     parser.add_argument("--target-modules", default="down_proj")
@@ -335,13 +342,18 @@ def attach_model_embedding_features(model, examples):
     return out
 
 
-def attach_model_activation_features(model, examples, max_context_tokens: int):
+def attach_model_activation_features(
+    model,
+    examples,
+    max_context_tokens: int,
+    activation_pooling: str,
+):
     out = []
     for example in examples:
         context_ids = example.document_ids
         if max_context_tokens > 0 and len(context_ids) > max_context_tokens:
             context_ids = context_ids[:max_context_tokens]
-        features = extract_layer_activation_feature(model, context_ids)
+        features = extract_layer_activation_feature(model, context_ids, activation_pooling)
         out.append(
             TokenExample(
                 document=example.document,
@@ -355,7 +367,7 @@ def attach_model_activation_features(model, examples, max_context_tokens: int):
     return out
 
 
-def extract_layer_activation_feature(model, input_ids):
+def extract_layer_activation_feature(model, input_ids, activation_pooling: str):
     h = model.model.embed_tokens(input_ids[None, :])
     h = h * getattr(model.model, "embed_scale", 1.0)
     mask = None
@@ -365,7 +377,10 @@ def extract_layer_activation_feature(model, input_ids):
     layer_features = []
     for layer in model.model.layers:
         h, _ = layer(h, mask, None)
-        layer_features.append(mx.mean(h[0], axis=0))
+        if activation_pooling == "latent":
+            layer_features.append(h[0])
+        else:
+            layer_features.append(mx.mean(h[0], axis=0))
     return mx.stack(layer_features)
 
 
@@ -440,6 +455,12 @@ def main():
             per_rank_gen=args.per_rank_gen,
             per_layer_processing=args.per_layer_processing,
             num_pre_head_layers=args.num_pre_head_layers,
+            activation_latents=(
+                args.activation_latents
+                if args.context_encoder == "model-activations"
+                and args.activation_pooling == "latent"
+                else 0
+            ),
         )
     examples = build_examples(tokenizer, args)
     if args.context_encoder == "model-embed":
@@ -449,6 +470,7 @@ def main():
             model,
             examples,
             args.context_max_tokens,
+            args.activation_pooling,
         )
     eval_examples = []
     if args.eval_examples > 0:
@@ -498,6 +520,8 @@ def main():
     print(f"context_encoder={args.context_encoder}")
     print(f"context_latents={args.context_latents}")
     print(f"context_max_tokens={args.context_max_tokens}")
+    print(f"activation_pooling={args.activation_pooling}")
+    print(f"activation_latents={args.activation_latents}")
     print(f"spec_conditioning={args.spec_conditioning}")
     print(f"per_rank_gen={args.per_rank_gen}")
     print(f"per_layer_processing={args.per_layer_processing}")

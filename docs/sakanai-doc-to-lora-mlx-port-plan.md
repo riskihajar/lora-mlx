@@ -298,6 +298,33 @@ per_layer_processing=True
 
 At `2e-4`, the per-layer activation matrix path produced `NaN`, so the current safe learning rate for this path is `1e-4` or lower. This is more Sakana-aligned structurally, but it currently underperforms the averaged-activation and model-embed runs on the tiny held-out sample.
 
+The activation path now also supports a trainable latent attention pooling mode with `--activation-pooling latent`. In this mode, preprocessing preserves sequence activations as `(layers, tokens, hidden)` and the hypernetwork pools each layer's context tokens through learned latent queries before generating LoRA weights. This is closer to the Perceiver-style aggregation used by SakanaAI than mean pooling, but still a compact MLX approximation. Validated output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=1e-4
+response_tokens=52
+initial_loss=13.055923
+final_loss=5.659515
+improvement=2.31x
+initial_token_acc=0.000
+final_token_acc=0.077
+initial_eval_loss=13.307540
+final_eval_loss=6.629034
+final_eval_token_acc=0.200
+eval_improvement=2.01x
+context_encoder=model-activations
+context_max_tokens=128
+activation_pooling=latent
+activation_latents=4
+per_rank_gen=True
+per_layer_processing=True
+```
+
+The latent activation aggregator is structurally closer to SakanaAI, but on the current tiny sample it underperforms simpler mean-pooled activation features. It should be treated as a parity building block, not the current best small-sample setting.
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text

@@ -70,6 +70,7 @@ class DocToLoRAHypernetwork(nn.Module):
         per_rank_gen: bool = False,
         per_layer_processing: bool = False,
         num_pre_head_layers: int = 1,
+        activation_latents: int = 0,
     ):
         super().__init__()
         if not module_specs:
@@ -82,8 +83,19 @@ class DocToLoRAHypernetwork(nn.Module):
         self.spec_conditioning = spec_conditioning
         self.per_rank_gen = per_rank_gen
         self.per_layer_processing = per_layer_processing
+        self.activation_latents = activation_latents
         self.encoder = HashContextEncoder(feature_size)
         self.proj = nn.Linear(feature_size, hidden_size)
+        self.activation_latent_queries = None
+        if activation_latents > 0:
+            self.activation_latent_queries = (
+                mx.random.normal((activation_latents, hidden_size)) * 0.02
+            )
+            self.activation_query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+            self.activation_key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+            self.activation_value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+            self.activation_out_proj = nn.Linear(activation_latents * hidden_size, hidden_size)
+            self.activation_norm = nn.RMSNorm(hidden_size)
         layer_count = max((spec.layer_idx for spec in self.module_specs), default=-1) + 1
         self.layer_embeddings = None
         if per_layer_processing:
@@ -123,10 +135,16 @@ class DocToLoRAHypernetwork(nn.Module):
             context_features = context_features[None, :]
         elif len(context_features.shape) == 2 and context_features.shape[0] > 1:
             per_layer_features = True
-        if len(context_features.shape) != 2:
-            raise ValueError("context_features must be a vector or per-layer matrix")
+        elif len(context_features.shape) == 3:
+            per_layer_features = True
+        if len(context_features.shape) not in {2, 3}:
+            raise ValueError("context_features must be a vector, per-layer matrix, or per-layer sequence")
 
         hidden = nn.silu(self.proj(context_features))
+        if len(hidden.shape) == 3:
+            if self.activation_latent_queries is None:
+                raise ValueError("activation_latents must be positive for sequence activations")
+            hidden = self.aggregate_activation_sequence(hidden)
         if not per_layer_features:
             hidden = hidden[0]
         generated = []
@@ -162,6 +180,18 @@ class DocToLoRAHypernetwork(nn.Module):
                 )
             )
         return generated
+
+    def aggregate_activation_sequence(self, hidden: mx.array) -> mx.array:
+        pooled = []
+        q = self.activation_query_proj(self.activation_latent_queries)
+        for layer_hidden in hidden:
+            k = self.activation_key_proj(layer_hidden)
+            v = self.activation_value_proj(layer_hidden)
+            scores = (q @ k.T) / math.sqrt(q.shape[-1])
+            weights = mx.softmax(scores.astype(mx.float32), axis=-1).astype(v.dtype)
+            latents = weights @ v
+            pooled.append(self.activation_norm(self.activation_out_proj(latents.reshape(-1))))
+        return mx.stack(pooled)
 
     def generate_from_text(self, text: str) -> list[GeneratedLoRA]:
         return self(self.encode_text(text))
@@ -251,6 +281,7 @@ class TokenDocToLoRAHypernetwork(nn.Module):
             per_rank_gen=per_rank_gen,
             per_layer_processing=per_layer_processing,
             num_pre_head_layers=num_pre_head_layers,
+            activation_latents=0,
         )
 
     def __call__(self, context_ids: mx.array) -> list[GeneratedLoRA]:
