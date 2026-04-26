@@ -605,6 +605,13 @@ scripts/train_doc_to_lora_sakana_gemma_scale64.sh eval
 ```
 
 The wrapper defaults to `data/doc_to_lora/sakana_gemma_multi_64.jsonl`, saves to `outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz`, and uses the current best stable scale setting: chunked model embeddings, learned chunk merger, per-rank generation, per-layer hypernetwork processing, CE loss, `5e-5` learning rate, 48 train / 16 eval examples.
+In `train` mode it now also saves the best eval-loss checkpoint every 6 steps by default:
+
+```text
+outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5_best.npz
+```
+
+The final two optional wrapper arguments override `eval_every` and the best-checkpoint path.
 
 Hypernetwork checkpoints now save a sidecar config at `<checkpoint>.json`. The config records model/architecture settings such as `hidden_size`, `rank`, `lora_layers`, `target_modules`, context chunking, learned merge mode, per-rank/per-layer flags, and seed. `scripts/internalize_doc_to_lora.py` and `scripts/eval_doc_to_lora_internalization.py` automatically load this config when present, reducing the risk of silently rebuilding a mismatched hypernetwork architecture. The existing scale64 checkpoint has a generated sidecar:
 

@@ -10,15 +10,21 @@ CHECKPOINT=${3:-outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz}
 MODEL=${4:-mlx-community/gemma-2-2b-it}
 ITERS=${5:-24}
 LEARNING_RATE=${6:-5e-5}
+EVAL_EVERY=${7:-6}
+BEST_CHECKPOINT=${8:-${CHECKPOINT:r}_best.npz}
 
 if [[ "${MODE}" != "train" && "${MODE}" != "eval" ]]; then
-  print "usage: $0 [train|eval] [dataset_jsonl] [checkpoint_npz] [model] [iters] [learning_rate]" >&2
+  print "usage: $0 [train|eval] [dataset_jsonl] [checkpoint_npz] [model] [iters] [learning_rate] [eval_every] [best_checkpoint_npz]" >&2
   exit 2
 fi
 
 CHECKPOINT_ARGS=()
 if [[ "${MODE}" == "train" ]]; then
-  CHECKPOINT_ARGS=(--save-hypernet "${CHECKPOINT}")
+  CHECKPOINT_ARGS=(
+    --save-hypernet "${CHECKPOINT}"
+    --save-best-hypernet "${BEST_CHECKPOINT}"
+    --eval-every "${EVAL_EVERY}"
+  )
 else
   ITERS=0
   CHECKPOINT_ARGS=(--load-hypernet "${CHECKPOINT}")
