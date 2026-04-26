@@ -523,6 +523,51 @@ per_layer_processing=True
 
 This enables longer multi-dataset runs to be saved and inspected, even before full optimizer-state resume is implemented.
 
+The first checkpointed 64-example multi-dataset run used 48 train and 16 eval examples with chunked model embeddings, learned chunk merger, per-rank generation, and per-layer hypernetwork processing:
+
+```text
+train_examples=48
+eval_examples=16
+iters=12
+learning_rate=1e-4
+response_tokens=468
+initial_loss=13.624434
+final_loss=8.137347
+improvement=1.67x
+initial_token_acc=0.000
+final_token_acc=0.111
+initial_eval_loss=13.544464
+final_eval_loss=9.170728
+final_eval_token_acc=0.079
+eval_improvement=1.48x
+loss_type=ce
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce.npz
+```
+
+Reloading the saved checkpoint with `--iters 0` reproduced the saved train/eval metrics exactly:
+
+```text
+loaded_hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce.npz
+initial_loss=8.137347
+final_loss=8.137347
+initial_token_acc=0.111
+final_token_acc=0.111
+initial_eval_loss=9.170728
+final_eval_loss=9.170728
+initial_eval_token_acc=0.079
+final_eval_token_acc=0.079
+train_examples=48
+eval_examples=16
+```
+
+This is the largest validated MLX Doc-to-LoRA run so far. The checkpoint path works, but the learning curve was noisy at `1e-4` and held-out improvement fell to `1.48x`, so the next scale step should reduce LR and/or increase iterations rather than only increasing data size.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
