@@ -248,6 +248,31 @@ per_layer_processing=True
 
 This is slightly below the best lightweight token-latent run on eval (`2.69x` vs `2.73x`), but it is a parity improvement because context features now come from the Gemma model rather than a separate toy embedding table.
 
+The MLX path also supports `--context-encoder model-activations`, which runs the document through frozen Gemma layers and averages per-layer activations into the hypernetwork feature. This is closer to SakanaAI's `ctx_encoder_type=per_layer_activations`, but still not full layer-to-layer processing because the current MLX path averages layer features into one vector. Validated output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=2e-4
+response_tokens=52
+initial_loss=13.743140
+final_loss=4.932809
+improvement=2.79x
+initial_token_acc=0.000
+final_token_acc=0.096
+initial_eval_loss=14.470487
+final_eval_loss=6.025581
+final_eval_token_acc=0.200
+eval_improvement=2.40x
+context_encoder=model-activations
+context_max_tokens=512
+per_rank_gen=True
+per_layer_processing=True
+```
+
+This confirms the model-activation path works. The lower held-out loss improvement compared with model-embed/token-latent indicates the next parity step should preserve per-layer activations separately instead of averaging them before the hypernetwork.
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text
