@@ -632,6 +632,22 @@ PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
 
 When eval examples are present, the script evaluates every `--eval-every` steps, saves the lowest-eval-loss hypernetwork checkpoint, and writes the matching sidecar config. A toy validation saved `best_eval_loss=4.031863` at step 2 and reloaded the checkpoint with the same eval loss, confirming best-checkpoint restore works.
 
+Optimizer-state checkpointing is also supported for long-run resume:
+
+```bash
+PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  ... \
+  --save-hypernet outputs/doc_to_lora/final_hypernet.npz \
+  --save-optimizer outputs/doc_to_lora/final_optimizer.npz
+
+PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  ... \
+  --load-hypernet outputs/doc_to_lora/final_hypernet.npz \
+  --load-optimizer outputs/doc_to_lora/final_optimizer.npz
+```
+
+A toy validation saved hypernetwork and Adam state after 2 steps, resumed from both checkpoints, and continued from the saved loss (`initial_loss=3.965599`) before training two more steps. This closes the main reproducibility gap for long-running scale experiments.
+
 An initial internalization/query API is now available:
 
 ```bash

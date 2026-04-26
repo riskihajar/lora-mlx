@@ -9,7 +9,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 import numpy as np
-from mlx.utils import tree_flatten
+from mlx.utils import tree_flatten, tree_unflatten
 
 from lora_mlx import utils as lora_utils
 from lora_mlx.doc_to_lora import (
@@ -159,6 +159,16 @@ def parse_args():
         "--load-hypernet",
         default=None,
         help="Optional path to load hypernetwork weights before training/eval.",
+    )
+    parser.add_argument(
+        "--save-optimizer",
+        default=None,
+        help="Optional path to save optimizer state as an MLX npz checkpoint.",
+    )
+    parser.add_argument(
+        "--load-optimizer",
+        default=None,
+        help="Optional path to load optimizer state before training.",
     )
     return parser.parse_args()
 
@@ -577,6 +587,17 @@ def save_hypernet_checkpoint(
     save_hypernet_config(checkpoint_path, args, target_modules, num_specs)
 
 
+def save_optimizer_checkpoint(optimizer, checkpoint_path: Path) -> None:
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    mx.savez(str(checkpoint_path), **dict(tree_flatten(optimizer.state)))
+
+
+def load_optimizer_checkpoint(optimizer, checkpoint_path: str) -> None:
+    optimizer_state = tree_unflatten(list(mx.load(checkpoint_path).items()))
+    optimizer.state.update(optimizer_state)
+    mx.eval(optimizer.state)
+
+
 def main():
     args = parse_args()
     np.random.seed(args.seed)
@@ -664,6 +685,9 @@ def main():
     loss_fn = make_loss(model, examples, args.loss_scope, args.loss_type)
     loss_and_grad = nn.value_and_grad(hypernet, loss_fn)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
+    if args.load_optimizer:
+        load_optimizer_checkpoint(optimizer, args.load_optimizer)
+        print(f"loaded_optimizer={args.load_optimizer}")
 
     initial_loss = loss_fn(hypernet).item()
     initial_acc = accuracy(model, hypernet, examples, args.loss_scope)
@@ -748,6 +772,10 @@ def main():
         print(f"best_eval_loss={best_eval_loss:.6f}")
         print(f"saved_best_hypernet={saved_best_hypernet}")
         print(f"saved_best_hypernet_config={hypernet_config_path(saved_best_hypernet)}")
+    if args.save_optimizer:
+        optimizer_path = Path(args.save_optimizer)
+        save_optimizer_checkpoint(optimizer, optimizer_path)
+        print(f"saved_optimizer={optimizer_path}")
 
     if args.iters > 0 and final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")
