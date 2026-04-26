@@ -28,6 +28,8 @@ class TokenExample:
     prompt_ids: mx.array
     response_ids: mx.array
     document_features: mx.array | list[mx.array] | None = None
+    logprobs_vals: mx.array | None = None
+    logprobs_indices: mx.array | None = None
 
 
 class ToyTokenizer:
@@ -119,6 +121,12 @@ def parse_args():
         help="Train on only the first response token or all response tokens.",
     )
     parser.add_argument(
+        "--loss-type",
+        choices=["ce", "kl-topk"],
+        default="ce",
+        help="Use hard-token cross entropy or sparse top-k teacher logprob loss.",
+    )
+    parser.add_argument(
         "--target-token-prefix",
         default="the",
         help="Tokenizer token used as the first synthetic target; later docs offset from it.",
@@ -193,12 +201,24 @@ def build_examples_from_jsonl(tokenizer, path: str, max_examples: int) -> list[T
             response_ids = row.get("response_ids") or tokenizer.encode(response)
             if not prompt_ids or not response_ids:
                 continue
+            logprobs_vals = row.get("logprobs_vals")
+            logprobs_indices = row.get("logprobs_indices")
             examples.append(
                 TokenExample(
                     document=document,
                     document_ids=mx.array(tokenizer.encode(document), dtype=mx.int32),
                     prompt_ids=mx.array(prompt_ids, dtype=mx.int32),
                     response_ids=mx.array(response_ids, dtype=mx.int32),
+                    logprobs_vals=(
+                        mx.array(logprobs_vals, dtype=mx.float32)
+                        if logprobs_vals is not None
+                        else None
+                    ),
+                    logprobs_indices=(
+                        mx.array(logprobs_indices, dtype=mx.int32)
+                        if logprobs_indices is not None
+                        else None
+                    ),
                 )
             )
             if len(examples) >= max_examples:
@@ -264,17 +284,42 @@ def apply_dynamic_generated_loras(model, generated_loras):
             raise ValueError(f"unsupported module {generated_lora.module_name!r}")
 
 
-def make_loss(model, examples, loss_scope: str):
+def make_loss(model, examples, loss_scope: str, loss_type: str):
     def loss_fn(hypernet):
         losses = []
         for example in examples:
             generated = generate_loras(hypernet, example)
             apply_dynamic_generated_loras(model, generated)
             logits, targets = teacher_forced_response_logits(model, example, loss_scope)
-            losses.append(nn.losses.cross_entropy(logits, targets).mean())
+            if loss_type == "kl-topk":
+                losses.append(topk_teacher_loss(logits, example, loss_scope))
+            else:
+                losses.append(nn.losses.cross_entropy(logits, targets).mean())
         return mx.mean(mx.stack(losses))
 
     return loss_fn
+
+
+def topk_teacher_loss(logits: mx.array, example: TokenExample, loss_scope: str) -> mx.array:
+    if example.logprobs_vals is None or example.logprobs_indices is None:
+        raise ValueError("kl-topk loss requires logprobs_vals and logprobs_indices")
+    teacher_vals = example.logprobs_vals
+    teacher_indices = example.logprobs_indices
+    if loss_scope == "first-token":
+        teacher_vals = teacher_vals[:1]
+        teacher_indices = teacher_indices[:1]
+    token_count = min(logits.shape[0], teacher_vals.shape[0], teacher_indices.shape[0])
+    logits = logits[:token_count]
+    teacher_vals = teacher_vals[:token_count]
+    teacher_indices = teacher_indices[:token_count]
+    student_logprobs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
+    selected_student_logprobs = mx.take_along_axis(
+        student_logprobs,
+        teacher_indices,
+        axis=-1,
+    )
+    teacher_probs = mx.softmax(teacher_vals, axis=-1)
+    return -mx.sum(teacher_probs * selected_student_logprobs, axis=-1).mean()
 
 
 def teacher_forced_response_logits(model, example, loss_scope: str):
@@ -362,6 +407,8 @@ def attach_model_embedding_features(model, examples, max_context_tokens: int, ch
                 prompt_ids=example.prompt_ids,
                 response_ids=example.response_ids,
                 document_features=document_features,
+                logprobs_vals=example.logprobs_vals,
+                logprobs_indices=example.logprobs_indices,
             )
         )
     eval_document_features(out)
@@ -403,6 +450,8 @@ def attach_model_activation_features(
                 prompt_ids=example.prompt_ids,
                 response_ids=example.response_ids,
                 document_features=document_features,
+                logprobs_vals=example.logprobs_vals,
+                logprobs_indices=example.logprobs_indices,
             )
         )
     eval_document_features(out)
@@ -426,10 +475,10 @@ def extract_layer_activation_feature(model, input_ids, activation_pooling: str):
     return mx.stack(layer_features)
 
 
-def metrics(model, hypernet, examples, loss_scope: str):
+def metrics(model, hypernet, examples, loss_scope: str, loss_type: str):
     if not examples:
         return None
-    loss_value = make_loss(model, examples, loss_scope)(hypernet).item()
+    loss_value = make_loss(model, examples, loss_scope, loss_type)(hypernet).item()
     exact = accuracy(model, hypernet, examples, loss_scope)
     token_acc = token_accuracy(model, hypernet, examples, loss_scope)
     return {
@@ -527,14 +576,14 @@ def main():
         eval_examples = examples[-args.eval_examples :]
         examples = examples[: -args.eval_examples]
 
-    loss_fn = make_loss(model, examples, args.loss_scope)
+    loss_fn = make_loss(model, examples, args.loss_scope, args.loss_type)
     loss_and_grad = nn.value_and_grad(hypernet, loss_fn)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
 
     initial_loss = loss_fn(hypernet).item()
     initial_acc = accuracy(model, hypernet, examples, args.loss_scope)
     initial_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
-    initial_eval = metrics(model, hypernet, eval_examples, args.loss_scope)
+    initial_eval = metrics(model, hypernet, eval_examples, args.loss_scope, args.loss_type)
     for step in range(args.iters):
         loss_value, grads = loss_and_grad(hypernet)
         optimizer.update(hypernet, grads)
@@ -547,7 +596,7 @@ def main():
         raise SystemExit("token smoke task produced NaN loss")
     final_acc = accuracy(model, hypernet, examples, args.loss_scope)
     final_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
-    final_eval = metrics(model, hypernet, eval_examples, args.loss_scope)
+    final_eval = metrics(model, hypernet, eval_examples, args.loss_scope, args.loss_type)
     improvement = initial_loss / final_loss if final_loss > 0 else math.inf
     print(f"initial_loss={initial_loss:.6f}")
     print(f"final_loss={final_loss:.6f}")
@@ -565,6 +614,7 @@ def main():
     print(f"target_modules={','.join(target_modules)}")
     print(f"num_specs={len(specs)}")
     print(f"loss_scope={args.loss_scope}")
+    print(f"loss_type={args.loss_type}")
     print(f"context_encoder={args.context_encoder}")
     print(f"context_latents={args.context_latents}")
     print(f"context_max_tokens={args.context_max_tokens}")

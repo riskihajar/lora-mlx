@@ -376,6 +376,33 @@ per_layer_processing=True
 
 The chunked embedding path slightly improved the tiny held-out result compared with non-chunked model embeddings (`2.71x` vs `2.69x`). The chunked activation path remained structurally useful but below simpler embedding features on this small run.
 
+The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
+
+```text
+train_examples=4
+eval_examples=1
+iters=12
+learning_rate=2e-4
+response_tokens=52
+initial_loss=13.452770
+final_loss=5.596339
+improvement=2.40x
+initial_token_acc=0.000
+final_token_acc=0.058
+initial_eval_loss=14.169008
+final_eval_loss=5.952075
+final_eval_token_acc=0.000
+eval_improvement=2.38x
+loss_type=kl-topk
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+per_rank_gen=True
+per_layer_processing=True
+```
+
+The KL/top-k path works and is structurally closer to SakanaAI, but on this tiny sample it underperforms the hard-token CE run (`2.38x` eval KL vs `2.71x` eval CE). It should be treated as a parity path for larger data, not the current best smoke-test setting.
+
 Layer/module spec conditioning has also been implemented as an ablation with `--spec-conditioning`. It adds a learned embedding per generated LoRA target before each head. On the same 4-train/1-eval run, it improved train loss slightly but underperformed the latent-only default on eval:
 
 ```text

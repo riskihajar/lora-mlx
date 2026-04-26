@@ -117,6 +117,9 @@ def extract_examples(row: dict, tokenizer=None) -> list[dict]:
         if "_prompt_ids" in row and "_response_ids" in row:
             example["prompt_ids"] = row["_prompt_ids"][len(out)]
             example["response_ids"] = row["_response_ids"][len(out)]
+        if "logprobs_vals" in row and "logprobs_indices" in row:
+            example["logprobs_vals"] = row["logprobs_vals"][len(out)]
+            example["logprobs_indices"] = row["logprobs_indices"][len(out)]
         out.append(example)
     return out
 
