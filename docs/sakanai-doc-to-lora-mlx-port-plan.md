@@ -629,9 +629,12 @@ For objective no-source-context evaluation, `scripts/eval_doc_to_lora_internaliz
 ```text
 examples=64
 response_tokens=670
+base_loss=13.319695
+base_token_acc=0.000
 internalized_loss=7.555706
 internalized_token_acc=0.101
 internalized_exact_acc=0.000
+internalized_improvement=1.76x
 hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
 context_chunk_tokens=128
 chunk_merge=learned
@@ -643,15 +646,18 @@ On the held-out 16-example split matching the checkpointed training run:
 examples=16
 skip_examples=48
 response_tokens=202
+base_loss=13.308561
+base_token_acc=0.000
 internalized_loss=8.673681
 internalized_token_acc=0.079
 internalized_exact_acc=0.000
+internalized_improvement=1.53x
 hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
 context_chunk_tokens=128
 chunk_merge=learned
 ```
 
-This evaluator reproduces the checkpoint reload metrics exactly and gives a cleaner end-to-end Doc-to-LoRA metric: document internalization happens before evaluation, while the answer prompt itself contains no source context.
+This evaluator reproduces the checkpoint reload metrics exactly and gives a cleaner end-to-end Doc-to-LoRA metric: document internalization happens before evaluation, while the answer prompt itself contains no source context. The baseline comparison shows generated LoRA internalization improves no-source-context Gemma over the base model (`1.76x` on all 64 examples, `1.53x` on the held-out 16-example split), even though exact-match generation remains unsolved.
 
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 

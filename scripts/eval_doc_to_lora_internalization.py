@@ -210,6 +210,27 @@ def evaluate(model, hypernet, examples: list[EvalExample], args):
     }
 
 
+def evaluate_base(model, examples: list[EvalExample]):
+    losses = []
+    correct = 0
+    total = 0
+    exact = 0
+    for example in examples:
+        logits, targets = teacher_forced_logits(model, example)
+        losses.append(nn.losses.cross_entropy(logits, targets).mean())
+        preds = mx.argmax(logits, axis=-1)
+        correct += int(mx.sum(preds == targets).item())
+        total += len(targets)
+        exact += int(mx.all(preds == targets).item())
+    loss = mx.mean(mx.stack(losses)).item()
+    return {
+        "loss": loss,
+        "token_acc": correct / total if total else 0.0,
+        "exact_acc": exact / len(examples),
+        "response_tokens": total,
+    }
+
+
 def main():
     args = parse_args()
     np.random.seed(args.seed)
@@ -223,13 +244,19 @@ def main():
         args.skip_examples,
         args.max_examples,
     )
+    base_metrics = evaluate_base(model, examples)
     metrics = evaluate(model, hypernet, examples, args)
+    improvement = base_metrics["loss"] / metrics["loss"] if metrics["loss"] > 0 else float("inf")
     print(f"examples={len(examples)}")
     print(f"skip_examples={args.skip_examples}")
     print(f"response_tokens={metrics['response_tokens']}")
+    print(f"base_loss={base_metrics['loss']:.6f}")
+    print(f"base_token_acc={base_metrics['token_acc']:.3f}")
+    print(f"base_exact_acc={base_metrics['exact_acc']:.3f}")
     print(f"internalized_loss={metrics['loss']:.6f}")
     print(f"internalized_token_acc={metrics['token_acc']:.3f}")
     print(f"internalized_exact_acc={metrics['exact_acc']:.3f}")
+    print(f"internalized_improvement={improvement:.2f}x")
     print(f"hypernet={args.hypernet}")
     print(f"num_specs={len(specs)}")
     print(f"context_chunk_tokens={args.context_chunk_tokens}")
