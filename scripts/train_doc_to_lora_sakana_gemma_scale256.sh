@@ -1,0 +1,66 @@
+#!/usr/bin/env zsh
+set -eo pipefail
+
+source ~/.zshrc
+set -u
+
+MODE=${1:-train}
+DATASET=${2:-data/doc_to_lora/sakana_gemma_multi_256.jsonl}
+CHECKPOINT=${3:-outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5.npz}
+MODEL=${4:-mlx-community/gemma-2-2b-it}
+ITERS=${5:-8}
+LEARNING_RATE=${6:-5e-5}
+EVAL_EVERY=${7:-4}
+BEST_CHECKPOINT=${8:-${CHECKPOINT:r}_best.npz}
+OPTIMIZER_CHECKPOINT=${9:-${CHECKPOINT:r}_optimizer.npz}
+
+if [[ "${MODE}" != "train" && "${MODE}" != "resume" && "${MODE}" != "eval" ]]; then
+  print "usage: $0 [train|resume|eval] [dataset_jsonl] [checkpoint_npz] [model] [iters] [learning_rate] [eval_every] [best_checkpoint_npz] [optimizer_checkpoint_npz]" >&2
+  exit 2
+fi
+
+CHECKPOINT_ARGS=()
+if [[ "${MODE}" == "train" ]]; then
+  CHECKPOINT_ARGS=(
+    --save-hypernet "${CHECKPOINT}"
+    --save-best-hypernet "${BEST_CHECKPOINT}"
+    --save-optimizer "${OPTIMIZER_CHECKPOINT}"
+    --eval-every "${EVAL_EVERY}"
+  )
+elif [[ "${MODE}" == "resume" ]]; then
+  CHECKPOINT_ARGS=(
+    --load-hypernet "${CHECKPOINT}"
+    --load-optimizer "${OPTIMIZER_CHECKPOINT}"
+    --save-hypernet "${CHECKPOINT}"
+    --save-best-hypernet "${BEST_CHECKPOINT}"
+    --save-optimizer "${OPTIMIZER_CHECKPOINT}"
+    --eval-every "${EVAL_EVERY}"
+  )
+else
+  ITERS=0
+  CHECKPOINT_ARGS=(--load-hypernet "${CHECKPOINT}")
+fi
+
+PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
+  --model "${MODEL}" \
+  --dataset-jsonl "${DATASET}" \
+  --max-examples 256 \
+  --eval-examples 64 \
+  --iters "${ITERS}" \
+  --lora-layers 2 \
+  --target-modules down_proj \
+  --max-specs 2 \
+  --hidden-size 128 \
+  --rank 4 \
+  --context-encoder model-embed \
+  --context-max-tokens 512 \
+  --context-chunk-tokens 128 \
+  --chunk-merge learned \
+  --max-context-chunks 8 \
+  --per-rank-gen \
+  --per-layer-processing \
+  --num-pre-head-layers 1 \
+  --loss-scope full-answer \
+  --loss-type ce \
+  --learning-rate "${LEARNING_RATE}" \
+  "${CHECKPOINT_ARGS[@]}"

@@ -704,6 +704,62 @@ internalized_source_gap=0.66x
 
 This is the largest validated MLX Doc-to-LoRA run so far. Compared with scale64, held-out improvement is slightly lower (`1.44x` vs `1.53x`) but remains positive on twice as many total examples and twice as many held-out examples. The run also validates the new best-checkpoint and optimizer-save workflow on a real Gemma/Sakana setup.
 
+The next scale256 run trained/evaluated on the full 256-example converted multi-dataset JSONL with a 192/64 split. It kept the same architecture and learning rate as scale128, saved best/final hypernet checkpoints, and saved optimizer state:
+
+```text
+train_examples=192
+eval_examples=64
+iters=8
+learning_rate=5e-5
+response_tokens=2385
+initial_loss=13.603632
+final_loss=9.208534
+improvement=1.48x
+initial_token_acc=0.000
+final_token_acc=0.089
+initial_eval_loss=13.547895
+final_eval_loss=7.571906
+final_eval_token_acc=0.151
+eval_improvement=1.79x
+context_encoder=model-embed
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5_optimizer.npz
+```
+
+End-to-end held-out internalization on the 64-example eval split:
+
+```text
+examples=64
+skip_examples=192
+response_tokens=436
+base_loss=13.168516
+source_context_loss=13.355886
+internalized_loss=7.571906
+internalized_token_acc=0.151
+internalized_improvement=1.74x
+internalized_source_gap=0.57x
+```
+
+End-to-end aggregate internalization on all 256 examples:
+
+```text
+examples=256
+response_tokens=2821
+base_loss=13.299145
+source_context_loss=13.393456
+internalized_loss=8.799377
+internalized_token_acc=0.099
+internalized_improvement=1.51x
+internalized_source_gap=0.66x
+```
+
+Scale256 is now the largest validated MLX Doc-to-LoRA run in this repo. Its held-out internalization improves over both scale64 and scale128 (`1.74x` vs `1.53x` and `1.44x`), with higher held-out token accuracy (`0.151`). The all-example aggregate remains similar to scale128 because train examples are harder/longer in aggregate, but the held-out result suggests the stable `model-embed + chunked learned merge + per-rank/per-layer` path scales positively to 256 examples.
+
 An initial internalization/query API is now available:
 
 ```bash
