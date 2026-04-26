@@ -176,13 +176,21 @@ def apply_dynamic_generated_loras(model, generated_loras):
 
 
 def teacher_forced_logits(model, example: EvalExample):
-    response_ids = example.response_ids
+    return teacher_forced_logits_from_prompt(model, example.prompt_ids, example.response_ids)
+
+
+def teacher_forced_source_context_logits(model, example: EvalExample):
+    prompt_ids = mx.concatenate([example.document_ids, example.prompt_ids], axis=0)
+    return teacher_forced_logits_from_prompt(model, prompt_ids, example.response_ids)
+
+
+def teacher_forced_logits_from_prompt(model, prompt_ids: mx.array, response_ids: mx.array):
     if len(response_ids) > 1:
-        input_ids = mx.concatenate([example.prompt_ids, response_ids[:-1]], axis=0)
+        input_ids = mx.concatenate([prompt_ids, response_ids[:-1]], axis=0)
     else:
-        input_ids = example.prompt_ids
+        input_ids = prompt_ids
     logits, _ = model(input_ids[None, :])
-    start = len(example.prompt_ids) - 1
+    start = len(prompt_ids) - 1
     end = start + len(response_ids)
     return logits[0, start:end, :].astype(mx.float32), response_ids.astype(mx.int32)
 
@@ -210,13 +218,16 @@ def evaluate(model, hypernet, examples: list[EvalExample], args):
     }
 
 
-def evaluate_base(model, examples: list[EvalExample]):
+def evaluate_static(model, examples: list[EvalExample], include_source_context: bool = False):
     losses = []
     correct = 0
     total = 0
     exact = 0
     for example in examples:
-        logits, targets = teacher_forced_logits(model, example)
+        if include_source_context:
+            logits, targets = teacher_forced_source_context_logits(model, example)
+        else:
+            logits, targets = teacher_forced_logits(model, example)
         losses.append(nn.losses.cross_entropy(logits, targets).mean())
         preds = mx.argmax(logits, axis=-1)
         correct += int(mx.sum(preds == targets).item())
@@ -244,19 +255,25 @@ def main():
         args.skip_examples,
         args.max_examples,
     )
-    base_metrics = evaluate_base(model, examples)
+    base_metrics = evaluate_static(model, examples)
+    source_metrics = evaluate_static(model, examples, include_source_context=True)
     metrics = evaluate(model, hypernet, examples, args)
     improvement = base_metrics["loss"] / metrics["loss"] if metrics["loss"] > 0 else float("inf")
+    source_gap = metrics["loss"] / source_metrics["loss"] if source_metrics["loss"] > 0 else float("inf")
     print(f"examples={len(examples)}")
     print(f"skip_examples={args.skip_examples}")
     print(f"response_tokens={metrics['response_tokens']}")
     print(f"base_loss={base_metrics['loss']:.6f}")
     print(f"base_token_acc={base_metrics['token_acc']:.3f}")
     print(f"base_exact_acc={base_metrics['exact_acc']:.3f}")
+    print(f"source_context_loss={source_metrics['loss']:.6f}")
+    print(f"source_context_token_acc={source_metrics['token_acc']:.3f}")
+    print(f"source_context_exact_acc={source_metrics['exact_acc']:.3f}")
     print(f"internalized_loss={metrics['loss']:.6f}")
     print(f"internalized_token_acc={metrics['token_acc']:.3f}")
     print(f"internalized_exact_acc={metrics['exact_acc']:.3f}")
     print(f"internalized_improvement={improvement:.2f}x")
+    print(f"internalized_source_gap={source_gap:.2f}x")
     print(f"hypernet={args.hypernet}")
     print(f"num_specs={len(specs)}")
     print(f"context_chunk_tokens={args.context_chunk_tokens}")

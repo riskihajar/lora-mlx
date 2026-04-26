@@ -631,10 +631,13 @@ examples=64
 response_tokens=670
 base_loss=13.319695
 base_token_acc=0.000
+source_context_loss=13.409904
+source_context_token_acc=0.000
 internalized_loss=7.555706
 internalized_token_acc=0.101
 internalized_exact_acc=0.000
 internalized_improvement=1.76x
+internalized_source_gap=0.56x
 hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
 context_chunk_tokens=128
 chunk_merge=learned
@@ -648,16 +651,19 @@ skip_examples=48
 response_tokens=202
 base_loss=13.308561
 base_token_acc=0.000
+source_context_loss=13.420023
+source_context_token_acc=0.000
 internalized_loss=8.673681
 internalized_token_acc=0.079
 internalized_exact_acc=0.000
 internalized_improvement=1.53x
+internalized_source_gap=0.65x
 hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
 context_chunk_tokens=128
 chunk_merge=learned
 ```
 
-This evaluator reproduces the checkpoint reload metrics exactly and gives a cleaner end-to-end Doc-to-LoRA metric: document internalization happens before evaluation, while the answer prompt itself contains no source context. The baseline comparison shows generated LoRA internalization improves no-source-context Gemma over the base model (`1.76x` on all 64 examples, `1.53x` on the held-out 16-example split), even though exact-match generation remains unsolved.
+This evaluator reproduces the checkpoint reload metrics exactly and gives a cleaner end-to-end Doc-to-LoRA metric: document internalization happens before evaluation, while the answer prompt itself contains no source context. The baseline comparison shows generated LoRA internalization improves no-source-context Gemma over the base model (`1.76x` on all 64 examples, `1.53x` on the held-out 16-example split), even though exact-match generation remains unsolved. A naive source-context baseline that prepends the document tokens to the prompt did not improve loss on this tokenized Sakana format; internalized LoRA remained better than both no-context and naive source-context baselines.
 
 The end-to-end internalization evaluator can be reproduced with:
 
