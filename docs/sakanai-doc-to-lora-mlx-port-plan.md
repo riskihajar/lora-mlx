@@ -803,6 +803,27 @@ saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi64_downproj_lr5e
 
 This ordinary-LoRA baseline is intentionally conservative and not yet tuned, but it gives the first apple-to-apple comparator on the same Gemma/Sakana split and LoRA target budget (`down_proj`, last 2 layers, first 2 specs, rank 4). Under these settings, the generated-LoRA internalization result remains stronger on the same held-out scale64 split (`1.53x` vs `1.11x` improvement; `0.079` vs `0.005` token accuracy).
 
+The safe ordinary-LoRA scale128 baseline also completed with `batch_size=2`, `96` train examples, and `32` eval examples:
+
+```text
+iters=6
+batch_size=2
+train_examples=96
+eval_examples=32
+initial_loss=13.330024
+final_loss=9.309938
+improvement=1.43x
+initial_eval_loss=13.395502
+source_context_eval_loss=13.445863
+final_eval_loss=9.740530
+final_eval_token_acc=0.079
+eval_improvement=1.38x
+saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi128_downproj_lr5e5_b2.npz
+saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi128_downproj_lr5e5_b2_best.npz
+```
+
+Under the same scale128 split and LoRA target budget, generated-LoRA internalization remains slightly stronger on held-out examples (`1.44x` vs `1.38x`; `0.084` vs `0.079` token accuracy). This narrows the gap versus scale64 and suggests the ordinary LoRA baseline should be tuned further before drawing strong conclusions, but it gives a concrete comparator for proposal/reporting.
+
 An initial internalization/query API is now available:
 
 ```bash
