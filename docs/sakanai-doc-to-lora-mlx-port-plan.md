@@ -926,6 +926,16 @@ ordinary_lora_i8_constrained_mean_f1=0.000000
 
 The constrained decoder changes the failure mode from blank outputs to repeated wrong content such as `sworn` or non-English fragments, but answer overlap remains zero on the 4-example smoke. This is useful negative evidence: decoding constraints alone are not enough; generation quality likely needs prompt/template alignment, answer-span stopping, or training with a generation-facing objective.
 
+The evaluator can also switch generation prompts with `--prompt-template raw-ids|decoded-prompt|clean-chat`. `raw-ids` matches teacher-forced eval, while `clean-chat` extracts the final `Question:` line and rebuilds a minimal Gemma chat prompt. A tiny clean-chat smoke on the first scale256 held-out example still produced zero answer overlap:
+
+```text
+base_clean_chat_mean_f1=0.000000
+generated_lora_clean_chat_mean_f1=0.000000
+ordinary_lora_i8_clean_chat_mean_f1=0.000000
+```
+
+The clean-chat outputs remained malformed or off-target (`dokumenta` repetition, Japanese fragments, or single non-answer tokens). This suggests the generation gap is not only caused by the raw upstream prompt IDs. The next useful generation-facing intervention is probably answer-candidate rescoring or constrained answer extraction, not more prompt templating alone.
+
 An initial internalization/query API is now available:
 
 ```bash

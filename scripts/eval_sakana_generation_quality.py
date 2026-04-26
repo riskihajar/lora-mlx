@@ -45,6 +45,12 @@ def parse_args():
     parser.add_argument("--max-new-tokens", type=int, default=24)
     parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument(
+        "--prompt-template",
+        choices=["raw-ids", "decoded-prompt", "clean-chat"],
+        default="raw-ids",
+        help="Prompt used for free generation; raw-ids matches teacher-forced eval.",
+    )
+    parser.add_argument(
         "--suppress-initial-whitespace",
         action="store_true",
         help="When greedy decoding, skip whitespace-only candidates until content appears.",
@@ -303,6 +309,38 @@ def generate_ids(
     return tokens
 
 
+def extract_question(prompt: str):
+    matches = re.findall(r"Question:\s*(.*?)(?=\n|$)", prompt, flags=re.DOTALL)
+    if matches:
+        return matches[-1].strip()
+    return prompt.replace("user", " ").replace("model", " ").strip()
+
+
+def prompt_ids_for_generation(tokenizer, example: GenerationExample, template: str):
+    if template == "raw-ids":
+        return example.prompt_ids
+    if template == "decoded-prompt":
+        return mx.array(tokenizer.encode(example.prompt), dtype=mx.int32)
+    question = extract_question(example.prompt)
+    instruction = (
+        "Answer the question with the minimal necessary words. "
+        "Do not explain."
+    )
+    content = f"{instruction}\n\nQuestion: {question}"
+    if hasattr(tokenizer, "apply_chat_template"):
+        try:
+            ids = tokenizer.apply_chat_template(
+                [{"role": "user", "content": content}],
+                tokenize=True,
+                add_generation_prompt=True,
+            )
+            return mx.array(ids, dtype=mx.int32)
+        except Exception:
+            pass
+    prompt = f"user\n{content}\nmodel"
+    return mx.array(tokenizer.encode(prompt), dtype=mx.int32)
+
+
 def normalize(text: str):
     text = text.replace("<end_of_turn>", " ").replace("<start_of_turn>", " ")
     return re.findall(r"\w+", text.lower())
@@ -353,9 +391,10 @@ def main():
         if hypernet is not None:
             generated_loras = generated_loras_for_example(model, hypernet, example, args)
             apply_dynamic_generated_loras(model, generated_loras)
+        prompt_ids = prompt_ids_for_generation(tokenizer, example, args.prompt_template)
         output_ids = generate_ids(
             model,
-            example.prompt_ids,
+            prompt_ids,
             tokenizer,
             args.max_new_tokens,
             args.temp,
@@ -381,6 +420,7 @@ def main():
     print(f"examples={len(examples)}")
     print(f"skip_examples={args.skip_examples}")
     print(f"max_new_tokens={args.max_new_tokens}")
+    print(f"prompt_template={args.prompt_template}")
     print(f"suppress_initial_whitespace={args.suppress_initial_whitespace}")
     print(f"top_k_fallback={args.top_k_fallback}")
     print(f"stop_on_end_turn={args.stop_on_end_turn}")
