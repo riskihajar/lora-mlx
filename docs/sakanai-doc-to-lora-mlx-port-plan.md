@@ -606,6 +606,24 @@ scripts/train_doc_to_lora_sakana_gemma_scale64.sh eval
 
 The wrapper defaults to `data/doc_to_lora/sakana_gemma_multi_64.jsonl`, saves to `outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz`, and uses the current best stable scale setting: chunked model embeddings, learned chunk merger, per-rank generation, per-layer hypernetwork processing, CE loss, `5e-5` learning rate, 48 train / 16 eval examples.
 
+An initial internalization/query API is now available:
+
+```bash
+PYTHONPATH=src python3 scripts/internalize_doc_to_lora.py \
+  --model mlx-community/gemma-2-2b-it \
+  --hypernet outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz \
+  --document-file path/to/document.txt \
+  --output outputs/doc_to_lora/internalized_doc.npz
+
+PYTHONPATH=src python3 scripts/query_internalized_lora.py \
+  --model mlx-community/gemma-2-2b-it \
+  --lora outputs/doc_to_lora/internalized_doc.npz \
+  --prompt "user\nQuestion here\nmodel\n" \
+  --max-tokens 64
+```
+
+The first script loads the trained hypernetwork checkpoint, embeds/chunks the document with frozen Gemma embeddings, generates LoRA A/B matrices, and saves the generated adapter plus JSON metadata. The second script reloads only the generated LoRA and patches it into Gemma for no-source-context querying. A plumbing validation produced `outputs/doc_to_lora/internalized_blue_falcon.npz` and successfully loaded it for generation. The generated text quality on that synthetic document was poor, so this should be treated as an API milestone rather than evidence of reliable no-context answer generation.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
