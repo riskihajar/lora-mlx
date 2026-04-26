@@ -648,6 +648,62 @@ PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
 
 A toy validation saved hypernetwork and Adam state after 2 steps, resumed from both checkpoints, and continued from the saved loss (`initial_loss=3.965599`) before training two more steps. This closes the main reproducibility gap for long-running scale experiments.
 
+The first scale128 run used a 256-example converted multi-dataset JSONL and trained/evaluated on the first 128 examples with a 96/32 split. It used the same stable architecture as scale64, `5e-5` learning rate, best checkpointing every 4 steps, and optimizer-state saving:
+
+```text
+train_examples=96
+eval_examples=32
+iters=12
+learning_rate=5e-5
+response_tokens=1120
+initial_loss=13.600569
+final_loss=8.711226
+improvement=1.56x
+initial_token_acc=0.000
+final_token_acc=0.088
+initial_eval_loss=13.630332
+final_eval_loss=9.332668
+final_eval_token_acc=0.084
+eval_improvement=1.46x
+context_encoder=model-embed
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi128_learned_ce_lr5e5.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi128_learned_ce_lr5e5_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi128_learned_ce_lr5e5_optimizer.npz
+```
+
+End-to-end held-out internalization on the 32-example eval split:
+
+```text
+examples=32
+skip_examples=96
+response_tokens=417
+base_loss=13.395420
+source_context_loss=13.445848
+internalized_loss=9.332668
+internalized_token_acc=0.084
+internalized_improvement=1.44x
+internalized_source_gap=0.69x
+```
+
+End-to-end aggregate internalization on all 128 examples:
+
+```text
+examples=128
+response_tokens=1537
+base_loss=13.346342
+source_context_loss=13.417802
+internalized_loss=8.866587
+internalized_token_acc=0.087
+internalized_improvement=1.51x
+internalized_source_gap=0.66x
+```
+
+This is the largest validated MLX Doc-to-LoRA run so far. Compared with scale64, held-out improvement is slightly lower (`1.44x` vs `1.53x`) but remains positive on twice as many total examples and twice as many held-out examples. The run also validates the new best-checkpoint and optimizer-save workflow on a real Gemma/Sakana setup.
+
 An initial internalization/query API is now available:
 
 ```bash
