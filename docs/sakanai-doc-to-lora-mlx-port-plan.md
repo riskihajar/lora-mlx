@@ -568,6 +568,35 @@ eval_examples=16
 
 This is the largest validated MLX Doc-to-LoRA run so far. The checkpoint path works, but the learning curve was noisy at `1e-4` and held-out improvement fell to `1.48x`, so the next scale step should reduce LR and/or increase iterations rather than only increasing data size.
 
+Repeating the same 64-example checkpointed run with a lower learning rate and more iterations improved stability and held-out loss:
+
+```text
+train_examples=48
+eval_examples=16
+iters=24
+learning_rate=5e-5
+response_tokens=468
+initial_loss=13.624434
+final_loss=7.183047
+improvement=1.90x
+initial_token_acc=0.000
+final_token_acc=0.111
+initial_eval_loss=13.544464
+final_eval_loss=8.673681
+final_eval_token_acc=0.079
+eval_improvement=1.56x
+loss_type=ce
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
+```
+
+Reloading `outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz` with `--iters 0` reproduced the saved metrics exactly (`initial_loss=7.183047`, `initial_eval_loss=8.673681`). Compared with the `1e-4` run, `5e-5` improved train loss (`8.137347 -> 7.183047`) and eval loss (`9.170728 -> 8.673681`) while keeping eval token accuracy unchanged (`0.079`). The next stable scale setting should start from `5e-5`, not `1e-4`.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
