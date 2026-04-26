@@ -624,6 +624,35 @@ PYTHONPATH=src python3 scripts/query_internalized_lora.py \
 
 The first script loads the trained hypernetwork checkpoint, embeds/chunks the document with frozen Gemma embeddings, generates LoRA A/B matrices, and saves the generated adapter plus JSON metadata. The second script reloads only the generated LoRA and patches it into Gemma for no-source-context querying. A plumbing validation produced `outputs/doc_to_lora/internalized_blue_falcon.npz` and successfully loaded it for generation. The generated text quality on that synthetic document was poor, so this should be treated as an API milestone rather than evidence of reliable no-context answer generation.
 
+For objective no-source-context evaluation, `scripts/eval_doc_to_lora_internalization.py` internalizes each JSONL document on the fly, patches the generated LoRA into Gemma, and reports teacher-forced prompt/response metrics without including the source document in the prompt. On the full 64-example local multi-dataset sample:
+
+```text
+examples=64
+response_tokens=670
+internalized_loss=7.555706
+internalized_token_acc=0.101
+internalized_exact_acc=0.000
+hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
+context_chunk_tokens=128
+chunk_merge=learned
+```
+
+On the held-out 16-example split matching the checkpointed training run:
+
+```text
+examples=16
+skip_examples=48
+response_tokens=202
+internalized_loss=8.673681
+internalized_token_acc=0.079
+internalized_exact_acc=0.000
+hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
+context_chunk_tokens=128
+chunk_merge=learned
+```
+
+This evaluator reproduces the checkpoint reload metrics exactly and gives a cleaner end-to-end Doc-to-LoRA metric: document internalization happens before evaluation, while the answer prompt itself contains no source context.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
