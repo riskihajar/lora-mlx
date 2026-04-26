@@ -850,6 +850,44 @@ internalized_source_gap=0.63x
 
 Resuming scale512 improves held-out internalization from `1.44x` to `1.57x`, passing scale64 and scale128 while still below the scale256 peak (`1.74x`). This supports continuing with resumable mini-batch training for larger runs; more steps may be more useful than another architecture change at this stage.
 
+The scale512 run was resumed again from the i12 final hypernetwork and optimizer state for 6 more mini-batch steps, giving an approximately 18-step run:
+
+```text
+loaded_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i12.npz
+loaded_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i12_optimizer.npz
+additional_iters=6
+batch_size=32
+train_examples=384
+eval_examples=128
+initial_loss=8.378478
+final_loss=7.998550
+improvement=1.05x
+initial_eval_loss=8.486353
+final_eval_loss=8.215082
+best_eval_loss=8.151770
+final_eval_token_acc=0.128
+eval_improvement=1.03x
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i18.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i18_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i18_optimizer.npz
+```
+
+Held-out internalization with the i18 best checkpoint:
+
+```text
+examples=128
+skip_examples=384
+response_tokens=1176
+base_loss=13.282986
+source_context_loss=13.401104
+internalized_loss=8.151770
+internalized_token_acc=0.156
+internalized_improvement=1.63x
+internalized_source_gap=0.61x
+```
+
+Scale512 i18 continues the upward trend (`1.44x -> 1.57x -> 1.63x`) and now has higher held-out token accuracy than the scale256 run (`0.156` vs `0.151`), though scale256 still has the stronger loss-ratio improvement (`1.74x`). The diminishing eval-loss gains suggest another short resume may still help, but the next improvement may require either more steps with a lower learning rate or a stronger context/merge architecture.
+
 An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
 
 ```bash
