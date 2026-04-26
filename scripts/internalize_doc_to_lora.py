@@ -36,6 +36,31 @@ def parse_args():
     return parser.parse_args()
 
 
+def apply_hypernet_config(args):
+    config_path = Path(args.hypernet).with_suffix(Path(args.hypernet).suffix + ".json")
+    if not config_path.exists():
+        return args
+    config = json.loads(config_path.read_text())
+    for key in [
+        "hidden_size",
+        "rank",
+        "lora_layers",
+        "target_modules",
+        "max_specs",
+        "context_max_tokens",
+        "context_chunk_tokens",
+        "chunk_merge",
+        "max_context_chunks",
+        "per_rank_gen",
+        "per_layer_processing",
+        "num_pre_head_layers",
+    ]:
+        if key in config:
+            setattr(args, key, config[key])
+    print(f"loaded_hypernet_config={config_path}")
+    return args
+
+
 def read_document(args) -> str:
     if args.document is not None:
         return args.document
@@ -131,6 +156,7 @@ def save_generated_loras(generated_loras, specs, args, document: str):
 
 def main():
     args = parse_args()
+    args = apply_hypernet_config(args)
     document = read_document(args)
     model, tokenizer, _ = lora_utils.load(args.model)
     model.freeze()

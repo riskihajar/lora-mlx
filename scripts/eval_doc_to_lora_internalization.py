@@ -49,6 +49,32 @@ def parse_args():
     return parser.parse_args()
 
 
+def apply_hypernet_config(args):
+    config_path = Path(args.hypernet).with_suffix(Path(args.hypernet).suffix + ".json")
+    if not config_path.exists():
+        return args
+    config = json.loads(config_path.read_text())
+    for key in [
+        "hidden_size",
+        "rank",
+        "lora_layers",
+        "target_modules",
+        "max_specs",
+        "context_max_tokens",
+        "context_chunk_tokens",
+        "chunk_merge",
+        "max_context_chunks",
+        "per_rank_gen",
+        "per_layer_processing",
+        "num_pre_head_layers",
+        "seed",
+    ]:
+        if key in config:
+            setattr(args, key, config[key])
+    print(f"loaded_hypernet_config={config_path}")
+    return args
+
+
 def load_examples(
     tokenizer,
     path: str,
@@ -244,6 +270,7 @@ def evaluate_static(model, examples: list[EvalExample], include_source_context: 
 
 def main():
     args = parse_args()
+    args = apply_hypernet_config(args)
     np.random.seed(args.seed)
     mx.random.seed(args.seed)
     model, tokenizer, _ = lora_utils.load(args.model)

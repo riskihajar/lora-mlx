@@ -517,6 +517,43 @@ def print_metrics(prefix: str, values: dict | None):
     print(f"{prefix}_response_tokens={values['response_tokens']}")
 
 
+def hypernet_config_path(checkpoint_path: Path) -> Path:
+    return checkpoint_path.with_suffix(checkpoint_path.suffix + ".json")
+
+
+def save_hypernet_config(
+    checkpoint_path: Path,
+    args,
+    target_modules: list[str],
+    num_specs: int,
+) -> None:
+    config = {
+        "model": args.model,
+        "feature_size": args.feature_size,
+        "hidden_size": args.hidden_size,
+        "rank": args.rank,
+        "lora_layers": args.lora_layers,
+        "target_modules": ",".join(target_modules),
+        "max_specs": args.max_specs,
+        "num_specs": num_specs,
+        "context_encoder": args.context_encoder,
+        "context_max_tokens": args.context_max_tokens,
+        "context_chunk_tokens": args.context_chunk_tokens,
+        "chunk_merge": args.chunk_merge,
+        "max_context_chunks": args.max_context_chunks,
+        "activation_pooling": args.activation_pooling,
+        "activation_latents": args.activation_latents,
+        "spec_conditioning": args.spec_conditioning,
+        "per_rank_gen": args.per_rank_gen,
+        "per_layer_processing": args.per_layer_processing,
+        "num_pre_head_layers": args.num_pre_head_layers,
+        "loss_scope": args.loss_scope,
+        "loss_type": args.loss_type,
+        "seed": args.seed,
+    }
+    hypernet_config_path(checkpoint_path).write_text(json.dumps(config, indent=2))
+
+
 def main():
     args = parse_args()
     np.random.seed(args.seed)
@@ -658,7 +695,9 @@ def main():
         save_path = Path(args.save_hypernet)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         mx.savez(str(save_path), **dict(tree_flatten(hypernet.parameters())))
+        save_hypernet_config(save_path, args, target_modules, len(specs))
         print(f"saved_hypernet={save_path}")
+        print(f"saved_hypernet_config={hypernet_config_path(save_path)}")
 
     if args.iters > 0 and final_loss >= initial_loss and final_acc <= initial_acc:
         raise SystemExit("token smoke task did not improve")
