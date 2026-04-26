@@ -428,6 +428,72 @@ per_layer_processing=True
 
 Mean merge on the same 12/4 split was effectively identical (`final_eval_loss=8.424996`, `eval_improvement=1.61x`), so learned merger is currently a parity feature rather than a measured small-sample gain. The important progress is that chunk-level LoRA merging is now trainable and differentiable.
 
+The dataset bridge has also been scaled from a single `squad_compact` parquet to a 64-example local multi-dataset sample. For the current Gemma prefix, the available selected parquets were `squad_compact`, `drop_compact`, and `ropes_compact`; `pwc_compact` was requested but not selected for this prefix. The 64-example JSONL was generated with:
+
+```bash
+PYTHONPATH=src python3 scripts/prepare_sakana_d2l_dataset.py \
+  --datasets squad_compact,pwc_compact,drop_compact,ropes_compact \
+  --max-files 1 \
+  --max-examples 64 \
+  --download \
+  --convert \
+  --output data/doc_to_lora/sakana_gemma_multi_64.jsonl
+```
+
+The first scaled benchmark used 32 examples from that file with a 24/8 train/eval split, chunked model embeddings, learned chunk merger, per-rank generation, and per-layer hypernetwork processing:
+
+```text
+train_examples=24
+eval_examples=8
+iters=16
+learning_rate=1e-4
+response_tokens=204
+initial_loss=13.601946
+final_loss=6.512096
+improvement=2.09x
+initial_token_acc=0.000
+final_token_acc=0.118
+initial_eval_loss=13.608601
+final_eval_loss=8.529862
+final_eval_token_acc=0.108
+eval_improvement=1.60x
+loss_type=ce
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+```
+
+The matching KL/top-k run was nearly identical:
+
+```text
+train_examples=24
+eval_examples=8
+iters=16
+learning_rate=1e-4
+response_tokens=204
+initial_loss=13.631938
+final_loss=6.560293
+improvement=2.08x
+initial_token_acc=0.000
+final_token_acc=0.118
+initial_eval_loss=13.591545
+final_eval_loss=8.563131
+final_eval_token_acc=0.108
+eval_improvement=1.59x
+loss_type=kl-topk
+context_encoder=model-embed
+context_max_tokens=512
+context_chunk_tokens=128
+chunk_merge=learned
+per_rank_gen=True
+per_layer_processing=True
+```
+
+The scaled run confirms the MLX Doc-to-LoRA pipeline now handles multi-dataset Sakana samples and larger eval splits. It also shows the remaining bottleneck is generalization: train loss improves consistently, but held-out improvement is much smaller on 8 eval examples than on the earlier 1-example smoke split.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
