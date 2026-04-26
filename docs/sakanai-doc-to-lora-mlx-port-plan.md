@@ -888,6 +888,45 @@ internalized_source_gap=0.61x
 
 Scale512 i18 continues the upward trend (`1.44x -> 1.57x -> 1.63x`) and now has higher held-out token accuracy than the scale256 run (`0.156` vs `0.151`), though scale256 still has the stronger loss-ratio improvement (`1.74x`). The diminishing eval-loss gains suggest another short resume may still help, but the next improvement may require either more steps with a lower learning rate or a stronger context/merge architecture.
 
+The scale512 run was resumed once more from i18 using a lower learning rate (`2e-5`) for 6 additional mini-batch steps, giving an approximately 24-step run:
+
+```text
+loaded_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i18.npz
+loaded_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_i18_optimizer.npz
+additional_iters=6
+batch_size=32
+learning_rate=2e-5
+train_examples=384
+eval_examples=128
+initial_loss=7.998550
+final_loss=7.665507
+improvement=1.04x
+initial_eval_loss=8.215082
+final_eval_loss=7.925923
+best_eval_loss=7.925923
+final_eval_token_acc=0.109
+eval_improvement=1.04x
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr2e5_b32_i24.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr2e5_b32_i24_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr2e5_b32_i24_optimizer.npz
+```
+
+Held-out internalization with the low-LR i24 best checkpoint:
+
+```text
+examples=128
+skip_examples=384
+response_tokens=1176
+base_loss=13.282986
+source_context_loss=13.401104
+internalized_loss=7.925923
+internalized_token_acc=0.109
+internalized_improvement=1.68x
+internalized_source_gap=0.59x
+```
+
+Lowering the learning rate continued to reduce held-out loss (`8.151770 -> 7.925923`) and improves scale512 loss-ratio to `1.68x`, close to the scale256 peak of `1.74x`. Token accuracy dropped from the i18 best checkpoint (`0.156 -> 0.109`), so scale512 now has two useful checkpoints: i18 for token accuracy and low-LR i24 for held-out loss/internalization ratio.
+
 An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
 
 ```bash
