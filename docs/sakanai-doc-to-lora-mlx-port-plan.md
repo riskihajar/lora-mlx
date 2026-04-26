@@ -824,6 +824,27 @@ saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi128_downproj_lr5
 
 Under the same scale128 split and LoRA target budget, generated-LoRA internalization remains slightly stronger on held-out examples (`1.44x` vs `1.38x`; `0.084` vs `0.079` token accuracy). This narrows the gap versus scale64 and suggests the ordinary LoRA baseline should be tuned further before drawing strong conclusions, but it gives a concrete comparator for proposal/reporting.
 
+The cautious ordinary-LoRA scale256 baseline completed with `batch_size=2` and only `4` iterations to avoid the memory pressure seen in the initial full-split attempt:
+
+```text
+iters=4
+batch_size=2
+train_examples=192
+eval_examples=64
+initial_loss=13.342724
+final_loss=12.039449
+improvement=1.11x
+initial_eval_loss=13.168523
+source_context_eval_loss=13.355839
+final_eval_loss=11.442686
+final_eval_token_acc=0.000
+eval_improvement=1.15x
+saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i4.npz
+saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i4_best.npz
+```
+
+On the same scale256 held-out split, generated-LoRA internalization remains substantially stronger (`1.74x` vs `1.15x`; `0.151` vs `0.000` token accuracy). This comparison is not fully tuned in favor of ordinary LoRA because the safe baseline used fewer optimizer steps than the generated-LoRA run, but it confirms that the generated-LoRA path is the current stronger result under the conservative local-memory budget.
+
 An initial internalization/query API is now available:
 
 ```bash
