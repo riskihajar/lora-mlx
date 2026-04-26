@@ -648,6 +648,20 @@ PYTHONPATH=src python3 scripts/train_doc_to_lora_token_smoke.py \
 
 A toy validation saved hypernetwork and Adam state after 2 steps, resumed from both checkpoints, and continued from the saved loss (`initial_loss=3.965599`) before training two more steps. This closes the main reproducibility gap for long-running scale experiments.
 
+Hypernetwork training can also use mini-batches with `--batch-size`. This avoids building a single MLX graph over the whole training split and enables larger scale runs on the local machine. A small Gemma/Sakana smoke with `32` total examples, `8` eval examples, and `batch_size=4` completed successfully:
+
+```text
+batch_size=4
+train_examples=24
+eval_examples=8
+initial_loss=13.601946
+final_loss=13.256526
+improvement=1.03x
+initial_eval_loss=13.608601
+final_eval_loss=13.288687
+eval_improvement=1.02x
+```
+
 The first scale128 run used a 256-example converted multi-dataset JSONL and trained/evaluated on the first 128 examples with a 96/32 split. It used the same stable architecture as scale64, `5e-5` learning rate, best checkpointing every 4 steps, and optimizer-state saving:
 
 ```text
@@ -759,6 +773,45 @@ internalized_source_gap=0.66x
 ```
 
 Scale256 is now the largest validated MLX Doc-to-LoRA run in this repo. Its held-out internalization improves over both scale64 and scale128 (`1.74x` vs `1.53x` and `1.44x`), with higher held-out token accuracy (`0.151`). The all-example aggregate remains similar to scale128 because train examples are harder/longer in aggregate, but the held-out result suggests the stable `model-embed + chunked learned merge + per-rank/per-layer` path scales positively to 256 examples.
+
+The first scale512 run used the mini-batch trainer on a 512-example converted multi-dataset JSONL with a 384/128 split. It kept the same architecture, used `batch_size=32`, and ran 6 optimizer steps:
+
+```text
+train_examples=384
+eval_examples=128
+iters=6
+batch_size=32
+learning_rate=5e-5
+response_tokens=3712
+initial_loss=13.633549
+final_loss=9.171760
+improvement=1.49x
+initial_token_acc=0.000
+final_token_acc=0.103
+initial_eval_loss=13.615852
+final_eval_loss=9.204689
+final_eval_token_acc=0.109
+eval_improvement=1.48x
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi512_learned_ce_lr5e5_b32_optimizer.npz
+```
+
+End-to-end held-out internalization on the 128-example eval split:
+
+```text
+examples=128
+skip_examples=384
+response_tokens=1176
+base_loss=13.282986
+source_context_loss=13.401104
+internalized_loss=9.204689
+internalized_token_acc=0.109
+internalized_improvement=1.44x
+internalized_source_gap=0.69x
+```
+
+Scale512 is now the largest validated MLX Doc-to-LoRA run in this repo. It validates mini-batch hypernetwork training, best-checkpointing, optimizer saving, and held-out internalization on 512 examples. Its held-out improvement is positive but lower than the scale256 peak (`1.44x` vs `1.74x`), so the next scale512 work should likely resume for more mini-batch steps rather than changing architecture immediately.
 
 An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
 

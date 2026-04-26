@@ -106,6 +106,12 @@ def parse_args():
     parser.add_argument("--lora-layers", type=int, default=1)
     parser.add_argument("--target-modules", default="down_proj")
     parser.add_argument("--iters", type=int, default=60)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        help="Optional number of train examples per optimizer step; 0 uses all train examples.",
+    )
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--toy-vocab-size", type=int, default=96)
@@ -337,6 +343,13 @@ def make_loss(model, examples, loss_scope: str, loss_type: str):
         return mx.mean(mx.stack(losses))
 
     return loss_fn
+
+
+def sample_examples(examples, batch_size: int):
+    if batch_size <= 0 or batch_size >= len(examples):
+        return examples
+    indices = np.random.choice(len(examples), size=batch_size, replace=False)
+    return [examples[int(index)] for index in indices]
 
 
 def topk_teacher_loss(logits: mx.array, example: TokenExample, loss_scope: str) -> mx.array:
@@ -682,13 +695,12 @@ def main():
         eval_examples = examples[-args.eval_examples :]
         examples = examples[: -args.eval_examples]
 
-    loss_fn = make_loss(model, examples, args.loss_scope, args.loss_type)
-    loss_and_grad = nn.value_and_grad(hypernet, loss_fn)
     optimizer = optim.Adam(learning_rate=args.learning_rate)
     if args.load_optimizer:
         load_optimizer_checkpoint(optimizer, args.load_optimizer)
         print(f"loaded_optimizer={args.load_optimizer}")
 
+    loss_fn = make_loss(model, examples, args.loss_scope, args.loss_type)
     initial_loss = loss_fn(hypernet).item()
     initial_acc = accuracy(model, hypernet, examples, args.loss_scope)
     initial_token_acc = token_accuracy(model, hypernet, examples, args.loss_scope)
@@ -700,6 +712,9 @@ def main():
         save_hypernet_checkpoint(hypernet, best_path, args, target_modules, len(specs))
         saved_best_hypernet = best_path
     for step in range(args.iters):
+        train_batch = sample_examples(examples, args.batch_size)
+        step_loss_fn = make_loss(model, train_batch, args.loss_scope, args.loss_type)
+        loss_and_grad = nn.value_and_grad(hypernet, step_loss_fn)
         loss_value, grads = loss_and_grad(hypernet)
         optimizer.update(hypernet, grads)
         mx.eval(hypernet.parameters(), optimizer.state, loss_value)
@@ -761,6 +776,7 @@ def main():
     print(f"per_rank_gen={args.per_rank_gen}")
     print(f"per_layer_processing={args.per_layer_processing}")
     print(f"num_pre_head_layers={args.num_pre_head_layers}")
+    print(f"batch_size={args.batch_size}")
     print(f"train_examples={len(examples)}")
     print(f"eval_examples={len(eval_examples)}")
     if args.save_hypernet:
