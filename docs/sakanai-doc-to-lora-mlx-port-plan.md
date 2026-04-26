@@ -597,6 +597,15 @@ saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz
 
 Reloading `outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz` with `--iters 0` reproduced the saved metrics exactly (`initial_loss=7.183047`, `initial_eval_loss=8.673681`). Compared with the `1e-4` run, `5e-5` improved train loss (`8.137347 -> 7.183047`) and eval loss (`9.170728 -> 8.673681`) while keeping eval token accuracy unchanged (`0.079`). The next stable scale setting should start from `5e-5`, not `1e-4`.
 
+The stable 64-example benchmark can now be reproduced with a wrapper:
+
+```bash
+scripts/train_doc_to_lora_sakana_gemma_scale64.sh train
+scripts/train_doc_to_lora_sakana_gemma_scale64.sh eval
+```
+
+The wrapper defaults to `data/doc_to_lora/sakana_gemma_multi_64.jsonl`, saves to `outputs/doc_to_lora/hypernet_gemma_multi64_learned_ce_lr5e5.npz`, and uses the current best stable scale setting: chunked model embeddings, learned chunk merger, per-rank generation, per-layer hypernetwork processing, CE loss, `5e-5` learning rate, 48 train / 16 eval examples.
+
 The Sakana dataset bridge now preserves teacher `logprobs_vals` and `logprobs_indices` from the parquet rows. The token smoke trainer supports `--loss-type kl-topk`, which trains against the sparse top-k teacher distribution instead of only the hard response token. This is closer to SakanaAI's `use_kl_loss=True` objective, although the current MLX version normalizes only over the provided top-k logits. Validated chunked `model-embed` output:
 
 ```text
