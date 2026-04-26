@@ -845,6 +845,27 @@ saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5
 
 On the same scale256 held-out split, generated-LoRA internalization remains substantially stronger (`1.74x` vs `1.15x`; `0.151` vs `0.000` token accuracy). This comparison is not fully tuned in favor of ordinary LoRA because the safe baseline used fewer optimizer steps than the generated-LoRA run, but it confirms that the generated-LoRA path is the current stronger result under the conservative local-memory budget.
 
+The ordinary-LoRA scale256 baseline was then safely resumed from the `i4` adapter for 4 additional mini-batch steps, giving an approximately 8-step comparator:
+
+```text
+loaded_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i4.npz
+additional_iters=4
+batch_size=2
+train_examples=192
+eval_examples=64
+initial_loss=12.039449
+final_loss=10.089024
+improvement=1.19x
+initial_eval_loss=11.442686
+final_eval_loss=8.269709
+final_eval_token_acc=0.154
+eval_improvement=1.38x
+saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i8.npz
+saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i8_best.npz
+```
+
+This makes the scale256 comparison more balanced on step count. Generated-LoRA still has lower held-out loss (`7.571906` vs `8.269709`) and higher loss-ratio improvement against the base (`1.74x` vs approximately `1.59x` when comparing the ordinary-LoRA `i8` loss against the same held-out base loss `13.168523`). Ordinary LoRA reaches similar token accuracy (`0.154` vs `0.151`), so the current result should be reported as competitive rather than one-sided: generated-LoRA is better on held-out loss, ordinary LoRA catches up on token-level accuracy after additional mini-batch updates.
+
 An initial internalization/query API is now available:
 
 ```bash
