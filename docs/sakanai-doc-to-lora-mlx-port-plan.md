@@ -936,6 +936,40 @@ ordinary_lora_i8_clean_chat_mean_f1=0.000000
 
 The clean-chat outputs remained malformed or off-target (`dokumenta` repetition, Japanese fragments, or single non-answer tokens). This suggests the generation gap is not only caused by the raw upstream prompt IDs. The next useful generation-facing intervention is probably answer-candidate rescoring or constrained answer extraction, not more prompt templating alone.
 
+An answer-candidate rescoring evaluator is available as a more stable generation-adjacent diagnostic:
+
+```bash
+PYTHONPATH=src python3 scripts/eval_sakana_answer_rescoring.py \
+  --mode generated \
+  --model mlx-community/gemma-2-2b-it \
+  --hypernet outputs/doc_to_lora/hypernet_gemma_multi256_learned_ce_lr5e5_best.npz \
+  --dataset-jsonl data/doc_to_lora/sakana_gemma_multi_256.jsonl \
+  --skip-examples 192 \
+  --max-examples 8 \
+  --num-candidates 8
+```
+
+It ranks the gold answer against distractor answers from the same held-out slice by average candidate-token cross entropy. Initial 8-example / 8-candidate held-out results:
+
+```text
+base_top1_acc=0.125000
+base_mean_rank=4.125000
+base_mrr=0.367708
+base_mean_margin=-1.170211
+
+generated_lora_top1_acc=0.000000
+generated_lora_mean_rank=4.625000
+generated_lora_mrr=0.277232
+generated_lora_mean_margin=-0.359675
+
+ordinary_lora_i8_top1_acc=0.125000
+ordinary_lora_i8_mean_rank=4.500000
+ordinary_lora_i8_mrr=0.358333
+ordinary_lora_i8_mean_margin=-1.102155
+```
+
+This is a mixed diagnostic result. Generated-LoRA substantially reduces the negative gold-vs-best-wrong margin, which means it moves the gold answer closer to the best distractor under candidate likelihood. However, it does not yet rank the gold answer top-1 on this small slice. Candidate rescoring therefore confirms the same broad generation gap: teacher-forced internalization improves, but answer selection/generation still needs a stronger inference method or training objective.
+
 An initial internalization/query API is now available:
 
 ```bash
