@@ -966,6 +966,43 @@ internalized_source_gap=0.83x
 
 Scale1024 is currently undertrained, but it is an important systems milestone: the same MLX hypernetwork path now runs on 1k examples with best-checkpointing and optimizer saving. As with scale512, the next step should be resumable mini-batch training before interpreting quality trends.
 
+The scale1024 run was resumed from the final hypernetwork and optimizer state for 4 additional mini-batch steps, giving an approximately 8-step run:
+
+```text
+loaded_hypernet=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32.npz
+loaded_optimizer=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32_optimizer.npz
+additional_iters=4
+batch_size=32
+train_examples=768
+eval_examples=256
+initial_loss=11.232615
+final_loss=8.576571
+improvement=1.31x
+initial_eval_loss=11.175956
+final_eval_loss=8.476877
+final_eval_token_acc=0.131
+eval_improvement=1.32x
+saved_hypernet=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32_i8.npz
+saved_best_hypernet=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32_i8_best.npz
+saved_optimizer=outputs/doc_to_lora/hypernet_gemma_multi1024_learned_ce_lr5e5_b32_i8_optimizer.npz
+```
+
+Held-out internalization with the scale1024 i8 best checkpoint:
+
+```text
+examples=256
+skip_examples=768
+response_tokens=2154
+base_loss=13.280730
+source_context_loss=13.387051
+internalized_loss=8.476877
+internalized_token_acc=0.131
+internalized_improvement=1.57x
+internalized_source_gap=0.63x
+```
+
+Scale1024 i8 improves held-out internalization from `1.19x` to `1.57x`, confirming that the first 1k run was mainly undertrained. It now matches the scale512 i12 loss-ratio level while using twice as many total examples and twice as many held-out examples. Further resume steps are likely worthwhile.
+
 An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
 
 ```bash
