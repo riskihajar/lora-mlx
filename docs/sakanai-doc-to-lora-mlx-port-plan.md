@@ -2,6 +2,56 @@
 
 This document tracks the target for a native MLX port of SakanaAI-style Doc-to-LoRA (D2L). It is intentionally stricter than the current document-specific LoRA baseline.
 
+## Current Status Snapshot
+
+The MLX Doc-to-LoRA path is now a runnable Sakana-style hypernetwork prototype rather than a document-specific fine-tuning baseline. The validated path is:
+
+```text
+document/context tokens -> frozen Gemma embedding context features -> MLX hypernetwork -> generated LoRA A/B tensors -> patched Gemma down_proj modules -> teacher-forced answer loss / internalization eval
+```
+
+Current implementation readiness:
+
+```text
+Prototype runnable: 95%
+Sakana-style MLX adaptation: 80-85%
+Experiment/proposal readiness: 85-90%
+Full SakanaAI parity: 70-75%
+Paper-quality final system: 60-65%
+```
+
+Best validated held-out internalization results so far:
+
+| Scale | Split | Checkpoint | Held-out loss | Token acc | Improvement vs base | Notes |
+| --- | ---: | --- | ---: | ---: | ---: | --- |
+| 64 | 48/16 | `hypernet_gemma_multi64_learned_ce_lr5e5.npz` | `8.673681` | `0.079` | `1.53x` | First stable held-out internalization result. |
+| 128 | 96/32 | `hypernet_gemma_multi128_learned_ce_lr5e5_best.npz` | `9.332668` | `0.084` | `1.44x` | Validated best checkpoint + optimizer saving. |
+| 256 | 192/64 | `hypernet_gemma_multi256_learned_ce_lr5e5_best.npz` | `7.571906` | `0.151` | `1.74x` | Best loss-ratio result so far. |
+| 512 | 384/128 | `hypernet_gemma_multi512_learned_ce_lr5e5_b32_i18_best.npz` | `8.151770` | `0.156` | `1.63x` | Best token-accuracy result so far. |
+| 512 | 384/128 | `hypernet_gemma_multi512_learned_ce_lr2e5_b32_i24_best.npz` | `7.925923` | `0.109` | `1.68x` | Best scale512 held-out loss after lower-LR resume. |
+| 1024 | 768/256 | `hypernet_gemma_multi1024_learned_ce_lr5e5_b32_i8_best.npz` | `8.476877` | `0.131` | `1.57x` | Largest validated run; still likely undertrained. |
+
+Main positive findings:
+
+- The generated-LoRA hypernetwork consistently beats base Gemma and naive source-context prompting on teacher-forced held-out internalization loss.
+- Mini-batch hypernetwork training plus optimizer checkpointing makes 512/1024-example runs feasible on the local MLX setup.
+- Ordinary LoRA is now available as an apple-to-apple comparator; it becomes competitive after more mini-batch updates, but generated-LoRA remains better on the strongest held-out loss comparisons so far.
+- Scale512 and scale1024 both improve substantially after resume, indicating early larger-scale runs are mostly undertrained rather than failed.
+
+Main gaps before claiming full SakanaAI parity or answer-generation quality:
+
+- Free generation remains weak even when teacher-forced internalization improves; current natural-answer outputs can collapse to whitespace or off-target fragments.
+- Exact match remains `0.000` in the reported held-out internalization runs.
+- The context encoder/aggregator is still an MLX approximation (`model-embed`, chunking, learned merge), not the full upstream Perceiver/per-layer activation stack.
+- Candidate rescoring and doc-span selection are diagnostic only; raw likelihood ranking is not yet a reliable answer-selection method.
+
+Near-term priority order:
+
+1. Continue resumable scale1024 mini-batch training until held-out loss plateaus.
+2. Add a stronger Sakana-style context aggregator / activation path once scale curves flatten.
+3. Improve generation-facing inference with better answer candidate filtering or training objectives.
+4. Keep ordinary LoRA baselines updated for the same split/budget when reporting comparisons.
+
 ## Target Semantics
 
 SakanaAI Doc-to-LoRA internalizes a document by running it through a context encoder and hypernetwork that directly generates or modulates LoRA weights for the base model. A new document should produce adapter weights without optimizing LoRA parameters for that document.
