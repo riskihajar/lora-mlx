@@ -35,7 +35,7 @@ Main positive findings:
 
 - The generated-LoRA hypernetwork consistently beats base Gemma and naive source-context prompting on teacher-forced held-out internalization loss.
 - Mini-batch hypernetwork training plus optimizer checkpointing makes 512/1024-example runs feasible on the local MLX setup.
-- Ordinary LoRA is now available as an apple-to-apple comparator; it becomes competitive after more mini-batch updates, but generated-LoRA remains better on the strongest held-out loss comparisons so far.
+- Ordinary LoRA is available as an exploratory pilot/diagnostic, but it is no longer part of the thesis implementation core; generated-LoRA/hypernetwork is the adapter condition to carry forward.
 - Scale512 and scale1024 both improve substantially after resume, indicating early larger-scale runs are mostly undertrained rather than failed.
 
 Main gaps before claiming full SakanaAI parity or answer-generation quality:
@@ -50,13 +50,21 @@ Near-term priority order:
 1. Continue resumable scale1024 mini-batch training until held-out loss plateaus.
 2. Add a stronger Sakana-style context aggregator / activation path once scale curves flatten.
 3. Improve generation-facing inference with better answer candidate filtering or training objectives.
-4. Keep ordinary LoRA baselines updated for the same split/budget when reporting comparisons.
+4. Treat ordinary LoRA as an optional diagnostic only; do not expand the thesis design around it unless explicitly needed for an appendix.
 
 ## Target Semantics
 
 SakanaAI Doc-to-LoRA internalizes a document by running it through a context encoder and hypernetwork that directly generates or modulates LoRA weights for the base model. A new document should produce adapter weights without optimizing LoRA parameters for that document.
 
-The current baseline in this repo is useful but different: it builds supervised examples from one document and trains a `.npz` LoRA adapter for that document. That remains a baseline, not the final D2L implementation.
+The earlier ordinary/document-specific LoRA path in this repo is useful but different: it builds supervised examples from one document and trains a `.npz` LoRA adapter for that document. It should now be reported only as an exploratory pilot that motivated the hypernetwork direction, not as a core thesis condition.
+
+For thesis/proposal continuity, keep the implementation design to three conditions:
+
+1. Base model without source-document context.
+2. Base model with source-document context.
+3. Base model plus Doc-to-LoRA generated adapter from a hypernetwork.
+
+Ordinary LoRA is historical/diagnostic evidence, not condition 4.
 
 ## SakanaAI Components Observed
 
@@ -1053,7 +1061,7 @@ internalized_source_gap=0.63x
 
 Scale1024 i8 improves held-out internalization from `1.19x` to `1.57x`, confirming that the first 1k run was mainly undertrained. It now matches the scale512 i12 loss-ratio level while using twice as many total examples and twice as many held-out examples. Further resume steps are likely worthwhile.
 
-An ordinary LoRA baseline script is available for apple-to-apple comparison on the same Sakana JSONL splits:
+An ordinary LoRA baseline script remains available for exploratory diagnostics on the same Sakana JSONL splits. This is retained to document the pilot path, but it is not part of the core three-condition thesis implementation:
 
 ```bash
 PYTHONPATH=src python3 scripts/train_sakana_ordinary_lora_baseline.py \
@@ -1073,7 +1081,7 @@ PYTHONPATH=src python3 scripts/train_sakana_ordinary_lora_baseline.py \
   --save-best-adapter outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_best.npz
 ```
 
-The baseline must use mini-batches. A first full-split implementation attempted to backpropagate through all 192 training examples in one MLX graph and was too memory-heavy for the local machine. The current script defaults to `--batch-size 8` and a tiny safety smoke (`16` total examples, `4` eval examples, `batch_size=2`, `1` iteration) completed successfully with `initial_loss=13.235734`, `final_loss=13.171252`, and `final_eval_loss=13.365139`. Run larger baselines gradually (`batch_size=2` or `4` first) before attempting the full scale256 comparison.
+The diagnostic baseline must use mini-batches. A first full-split implementation attempted to backpropagate through all 192 training examples in one MLX graph and was too memory-heavy for the local machine. The current script defaults to `--batch-size 8` and a tiny safety smoke (`16` total examples, `4` eval examples, `batch_size=2`, `1` iteration) completed successfully with `initial_loss=13.235734`, `final_loss=13.171252`, and `final_eval_loss=13.365139`. Run larger baselines gradually (`batch_size=2` or `4` first) only if an appendix-level diagnostic comparison is needed.
 
 A safe ordinary-LoRA scale64 baseline completed with `batch_size=2`, `48` train examples, and `16` eval examples:
 
@@ -1094,7 +1102,7 @@ saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi64_downproj_lr5e5_b2.
 saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi64_downproj_lr5e5_b2_best.npz
 ```
 
-This ordinary-LoRA baseline is intentionally conservative and not yet tuned, but it gives the first apple-to-apple comparator on the same Gemma/Sakana split and LoRA target budget (`down_proj`, last 2 layers, first 2 specs, rank 4). Under these settings, the generated-LoRA internalization result remains stronger on the same held-out scale64 split (`1.53x` vs `1.11x` improvement; `0.079` vs `0.005` token accuracy).
+This ordinary-LoRA run is intentionally conservative and should be treated as pilot evidence. Under these settings, the generated-LoRA internalization result remains stronger on the same held-out scale64 split (`1.53x` vs `1.11x` improvement; `0.079` vs `0.005` token accuracy). The thesis design should not expand around this baseline; it only helps justify why the adapter condition is implemented with Doc-to-LoRA/hypernetwork.
 
 The safe ordinary-LoRA scale128 baseline also completed with `batch_size=2`, `96` train examples, and `32` eval examples:
 
@@ -1115,7 +1123,7 @@ saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi128_downproj_lr5e5_b2
 saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi128_downproj_lr5e5_b2_best.npz
 ```
 
-Under the same scale128 split and LoRA target budget, generated-LoRA internalization remains slightly stronger on held-out examples (`1.44x` vs `1.38x`; `0.084` vs `0.079` token accuracy). This narrows the gap versus scale64 and suggests the ordinary LoRA baseline should be tuned further before drawing strong conclusions, but it gives a concrete comparator for proposal/reporting.
+Under the same scale128 split and LoRA target budget, generated-LoRA internalization remains slightly stronger on held-out examples (`1.44x` vs `1.38x`; `0.084` vs `0.079` token accuracy). This is useful diagnostic evidence, but it should not be promoted to a required proposal/thesis condition.
 
 The cautious ordinary-LoRA scale256 baseline completed with `batch_size=2` and only `4` iterations to avoid the memory pressure seen in the initial full-split attempt:
 
@@ -1136,7 +1144,7 @@ saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2
 saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i4_best.npz
 ```
 
-On the same scale256 held-out split, generated-LoRA internalization remains substantially stronger (`1.74x` vs `1.15x`; `0.151` vs `0.000` token accuracy). This comparison is not fully tuned in favor of ordinary LoRA because the safe baseline used fewer optimizer steps than the generated-LoRA run, but it confirms that the generated-LoRA path is the current stronger result under the conservative local-memory budget.
+On the same scale256 held-out split, generated-LoRA internalization remains substantially stronger (`1.74x` vs `1.15x`; `0.151` vs `0.000` token accuracy). This comparison is not fully tuned in favor of ordinary LoRA because the safe baseline used fewer optimizer steps than the generated-LoRA run, but it supports dropping ordinary LoRA from the core implementation path and keeping the thesis design focused on Doc-to-LoRA/hypernetwork.
 
 The ordinary-LoRA scale256 baseline was then safely resumed from the `i4` adapter for 4 additional mini-batch steps, giving an approximately 8-step comparator:
 
@@ -1157,7 +1165,7 @@ saved_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2
 saved_best_adapter=outputs/doc_to_lora/ordinary_lora_gemma_multi256_downproj_lr5e5_b2_i8_best.npz
 ```
 
-This makes the scale256 comparison more balanced on step count. Generated-LoRA still has lower held-out loss (`7.571906` vs `8.269709`) and higher loss-ratio improvement against the base (`1.74x` vs approximately `1.59x` when comparing the ordinary-LoRA `i8` loss against the same held-out base loss `13.168523`). Ordinary LoRA reaches similar token accuracy (`0.154` vs `0.151`), so the current result should be reported as competitive rather than one-sided: generated-LoRA is better on held-out loss, ordinary LoRA catches up on token-level accuracy after additional mini-batch updates.
+This makes the scale256 diagnostic more balanced on step count. Generated-LoRA still has lower held-out loss (`7.571906` vs `8.269709`) and higher loss-ratio improvement against the base (`1.74x` vs approximately `1.59x` when comparing the ordinary-LoRA `i8` loss against the same held-out base loss `13.168523`). Ordinary LoRA reaches similar token accuracy (`0.154` vs `0.151`), so the result should be treated as a pilot nuance: ordinary LoRA can learn token-level signals, but it is not faithful to Doc-to-LoRA because it optimizes an adapter directly instead of generating one from document representation.
 
 A small generation-quality evaluator is available for direct free-generation checks:
 
@@ -1409,14 +1417,13 @@ For now the wrappers keep spec conditioning off because the latent-only setting 
 
 Interpretation: the native MLX hypernetwork path now trains across multiple Sakana examples and improves a held-out example when the context encoder is learnable. Dataset availability alone was not enough; replacing static hash features with trainable token context features improved both train and eval loss, and adding latent queries improved eval loss further. The next SakanaAI parity gap is replacing this lightweight latent aggregator with model-derived context activations and a fuller Perceiver-style block.
 
-This enables the comparison we need:
+This supports the three-condition comparison needed for thesis continuity:
 
-1. Sakana dataset plus ordinary per-document LoRA baseline.
-2. Sakana dataset plus native MLX hypernetwork-generated LoRA.
-3. Pasal.id dataset plus ordinary per-document LoRA baseline.
-4. Pasal.id dataset plus native MLX hypernetwork-generated LoRA.
+1. Base model without source-document context.
+2. Base model with source-document context.
+3. Base model plus native MLX hypernetwork-generated LoRA.
 
-That matrix separates whether gains come from the dataset format, the hypernetwork architecture, or the domain data.
+The earlier ordinary per-document LoRA runs remain useful as pilot notes, but they should not expand the main experiment matrix. The core comparison should isolate whether the generated adapter can improve no-context answering and approach the source-context condition.
 
 ## Minimum Native MLX MVP
 

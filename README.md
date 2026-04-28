@@ -103,7 +103,7 @@ source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --help
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.pasalid --help
 ```
 
-Interactive Pasal.id-style chat with model and A/B/C/D mode selection:
+Interactive Pasal.id-style chat with model and historical A/B/C/D mode selection:
 
 ```bash
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat
@@ -121,7 +121,9 @@ Useful direct mode for the current clean TinyLlama adapter:
 source ~/.zshrc && PYTHONPATH=src python3 -m lora_mlx.chat --preset tinyllama-clean --condition D
 ```
 
-Matrix mode compares answers in one chat session. Compare A/B/C/D for one model:
+Matrix mode compares answers in one chat session. The A/B/C/D modes are retained for older Pasal.id pilot experiments; the current Doc-to-LoRA thesis implementation should be reported as a three-condition design: base no-context, base with source context, and generated adapter via hypernetwork.
+
+Compare A/B/C/D for one model:
 
 You can enable it interactively from inside chat with `/matrix`, then return to normal mode with `/single`.
 

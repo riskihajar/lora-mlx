@@ -2,6 +2,8 @@
 
 Dokumen ini memetakan target proposal terhadap status eksperimen yang sudah dibangun di repo `lora-mlx`, sekaligus menjadi rencana kerja untuk mengubah hasil pilot menjadi eksperimen final tesis.
 
+> Catatan status terbaru: dokumen ini merekam eksperimen Pasal.id/ordinary LoRA lama. Untuk arah tesis Doc-to-LoRA terbaru, desain inti tidak lagi diperluas ke A/B/C/D. Implementasi final dipertahankan sebagai tiga kondisi: base tanpa konteks dokumen, base dengan dokumen sumber sebagai konteks, dan Doc-to-LoRA generated adapter melalui hypernetwork. Ordinary LoRA cukup dipakai sebagai pilot/diagnostic historis.
+
 ## Keterangan Status
 
 | Emoji | Status | Arti |
