@@ -273,6 +273,98 @@ class ResMLPBlock(nn.Module):
         return x + self.down(nn.silu(self.up(self.norm(x))))
 
 
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, hidden_size: int):
+        super().__init__()
+        self.query_norm = nn.RMSNorm(hidden_size)
+        self.context_norm = nn.RMSNorm(hidden_size)
+        self.query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.mlp = ResMLPBlock(hidden_size, hidden_size * 4)
+
+    def __call__(self, queries: mx.array, context: mx.array) -> mx.array:
+        q = self.query_proj(self.query_norm(queries))
+        context = self.context_norm(context)
+        k = self.key_proj(context)
+        v = self.value_proj(context)
+        scores = (q @ k.T) / math.sqrt(q.shape[-1])
+        weights = mx.softmax(scores.astype(mx.float32), axis=-1).astype(v.dtype)
+        attended = self.out_proj(weights @ v)
+        return self.mlp(queries + attended)
+
+
+class SelfAttentionBlock(nn.Module):
+    def __init__(self, hidden_size: int):
+        super().__init__()
+        self.norm = nn.RMSNorm(hidden_size)
+        self.query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.mlp = ResMLPBlock(hidden_size, hidden_size * 4)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        h = self.norm(x)
+        q = self.query_proj(h)
+        k = self.key_proj(h)
+        v = self.value_proj(h)
+        scores = (q @ k.T) / math.sqrt(q.shape[-1])
+        weights = mx.softmax(scores.astype(mx.float32), axis=-1).astype(v.dtype)
+        attended = self.out_proj(weights @ v)
+        return self.mlp(x + attended)
+
+
+class PerceiverContextAggregator(nn.Module):
+    """Sakana-style latent bottleneck for context-to-LoRA features.
+
+    Upstream Doc-to-LoRA uses a Perceiver bottleneck and decoder output queries
+    for layer/module/rank-conditioned LoRA generation. This MLX version keeps the
+    same high-level shape while using small single-head attention blocks for local
+    feasibility.
+    """
+
+    def __init__(
+        self,
+        feature_size: int,
+        hidden_size: int,
+        num_outputs: int,
+        num_latents: int = 64,
+        num_blocks: int = 1,
+        num_self_attn_per_block: int = 1,
+    ):
+        super().__init__()
+        if num_latents <= 0:
+            raise ValueError("num_latents must be positive")
+        if num_outputs <= 0:
+            raise ValueError("num_outputs must be positive")
+        self.input_proj = nn.Linear(feature_size, hidden_size)
+        self.latent_queries = mx.random.normal((num_latents, hidden_size)) * 0.02
+        self.output_queries = mx.random.normal((num_outputs, hidden_size)) * 0.02
+        self.cross_blocks = [CrossAttentionBlock(hidden_size) for _ in range(num_blocks)]
+        self.self_blocks = [
+            [SelfAttentionBlock(hidden_size) for _ in range(num_self_attn_per_block)]
+            for _ in range(num_blocks)
+        ]
+        self.decoder = CrossAttentionBlock(hidden_size)
+        self.out_norm = nn.RMSNorm(hidden_size)
+
+    def __call__(self, context_features: mx.array) -> mx.array:
+        if len(context_features.shape) == 1:
+            context_features = context_features[None, :]
+        if len(context_features.shape) != 2:
+            raise ValueError("perceiver context_features must have shape [seq, feature]")
+        context = nn.silu(self.input_proj(context_features))
+        latents = self.latent_queries
+        for cross_block, self_blocks in zip(self.cross_blocks, self.self_blocks):
+            latents = cross_block(latents, context)
+            for self_block in self_blocks:
+                latents = self_block(latents)
+        outputs = self.decoder(self.output_queries, latents)
+        return self.out_norm(outputs)
+
+
 class HashedTokenContextEncoder(nn.Module):
     """Trainable mean-pooled token encoder with bounded embedding size."""
 
@@ -353,6 +445,125 @@ class TokenDocToLoRAHypernetwork(nn.Module):
 
     def __call__(self, context_ids: mx.array) -> list[GeneratedLoRA]:
         return self.hypernet(self.context_encoder(context_ids))
+
+
+class PerceiverDocToLoRAHypernetwork(nn.Module):
+    """Generate LoRA with a Sakana-style Perceiver bottleneck.
+
+    Inputs should be context token features, e.g. frozen Gemma embeddings with
+    shape `[seq_len, feature_size]`. The aggregator emits one output query per
+    target module and LoRA rank, matching the upstream D2L idea that the context
+    bottleneck produces layer/module/rank-conditioned generation features.
+    """
+
+    def __init__(
+        self,
+        module_specs: Sequence[LoRAModuleSpec],
+        feature_size: int = 256,
+        hidden_size: int = 512,
+        rank: int = 8,
+        scale: float = 20.0,
+        num_latents: int = 64,
+        num_blocks: int = 1,
+        num_self_attn_per_block: int = 1,
+        per_layer_processing: bool = True,
+        num_pre_head_layers: int = 1,
+        chunk_merge: str = "mean",
+        max_context_chunks: int = 8,
+    ):
+        super().__init__()
+        if not module_specs:
+            raise ValueError("module_specs must not be empty")
+        if rank <= 0:
+            raise ValueError("rank must be positive")
+        self.module_specs = list(module_specs)
+        self.rank = rank
+        self.scale = scale
+        self.chunk_merge = chunk_merge
+        self.num_outputs = len(self.module_specs) * rank
+        self.aggregator = PerceiverContextAggregator(
+            feature_size=feature_size,
+            hidden_size=hidden_size,
+            num_outputs=self.num_outputs,
+            num_latents=num_latents,
+            num_blocks=num_blocks,
+            num_self_attn_per_block=num_self_attn_per_block,
+        )
+        layer_count = max((spec.layer_idx for spec in self.module_specs), default=-1) + 1
+        self.layer_embeddings = None
+        if per_layer_processing:
+            self.layer_embeddings = mx.random.normal((layer_count, hidden_size)) * 0.02
+        self.pre_head_layers = [
+            ResMLPBlock(hidden_size, hidden_size * 4) for _ in range(num_pre_head_layers)
+        ]
+        self.a_heads = [nn.Linear(hidden_size, spec.input_dims) for spec in self.module_specs]
+        self.b_heads = [nn.Linear(hidden_size, spec.output_dims) for spec in self.module_specs]
+        self.chunk_merge_logits = None
+        if chunk_merge == "learned":
+            if max_context_chunks <= 0:
+                raise ValueError("max_context_chunks must be positive for learned chunk merge")
+            self.chunk_merge_logits = mx.zeros((len(self.module_specs), max_context_chunks))
+
+    def __call__(self, context_features: mx.array) -> list[GeneratedLoRA]:
+        if len(context_features.shape) == 3:
+            # Per-layer activation sequences are already a closer upstream mode.
+            # Flatten layers into one sequence so decoder queries can attend across
+            # the complete context feature set.
+            context_features = context_features.reshape(-1, context_features.shape[-1])
+        features = self.aggregator(context_features)
+        features = features.reshape(len(self.module_specs), self.rank, -1)
+        init_scale = 1 / math.sqrt(features.shape[-1])
+        generated = []
+        for idx, (spec, a_head, b_head) in enumerate(
+            zip(self.module_specs, self.a_heads, self.b_heads)
+        ):
+            spec_hidden = features[idx]
+            if self.layer_embeddings is not None:
+                spec_hidden = spec_hidden + self.layer_embeddings[spec.layer_idx]
+            for layer in self.pre_head_layers:
+                spec_hidden = layer(spec_hidden)
+            lora_a = a_head(spec_hidden).T * init_scale
+            lora_b = b_head(spec_hidden) * init_scale
+            generated.append(
+                GeneratedLoRA(
+                    layer_idx=spec.layer_idx,
+                    module_name=spec.module_name,
+                    lora_a=lora_a,
+                    lora_b=lora_b,
+                    scale=self.scale,
+                )
+            )
+        return generated
+
+    def merge_generated_lora_groups(
+        self,
+        generated_groups: Sequence[Sequence[GeneratedLoRA]],
+    ) -> list[GeneratedLoRA]:
+        if self.chunk_merge_logits is None:
+            return merge_generated_lora_groups(generated_groups)
+        if not generated_groups:
+            raise ValueError("generated_groups must not be empty")
+        if len(generated_groups) == 1:
+            return list(generated_groups[0])
+        if len(generated_groups) > self.chunk_merge_logits.shape[1]:
+            raise ValueError("number of context chunks exceeds max_context_chunks")
+
+        merged = []
+        chunk_count = len(generated_groups)
+        for lora_idx, first in enumerate(generated_groups[0]):
+            weights = mx.softmax(self.chunk_merge_logits[lora_idx, :chunk_count], axis=0)
+            lora_as = mx.stack([group[lora_idx].lora_a for group in generated_groups])
+            lora_bs = mx.stack([group[lora_idx].lora_b for group in generated_groups])
+            merged.append(
+                GeneratedLoRA(
+                    layer_idx=first.layer_idx,
+                    module_name=first.module_name,
+                    lora_a=mx.sum(lora_as * weights[:, None, None], axis=0),
+                    lora_b=mx.sum(lora_bs * weights[:, None, None], axis=0),
+                    scale=first.scale,
+                )
+            )
+        return merged
 
 
 class GeneratedLoRALinear(nn.Module):

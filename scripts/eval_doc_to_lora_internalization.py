@@ -12,6 +12,7 @@ from lora_mlx import utils as lora_utils
 from lora_mlx.doc_to_lora import (
     DocToLoRAHypernetwork,
     GeneratedLoRALinear,
+    PerceiverDocToLoRAHypernetwork,
     infer_lora_module_specs,
 )
 
@@ -42,6 +43,10 @@ def parse_args():
     parser.add_argument("--context-chunk-tokens", type=int, default=128)
     parser.add_argument("--chunk-merge", choices=["mean", "learned"], default="learned")
     parser.add_argument("--max-context-chunks", type=int, default=8)
+    parser.add_argument("--hypernet-aggregator", choices=["mlp", "perceiver"], default="mlp")
+    parser.add_argument("--perceiver-latents", type=int, default=64)
+    parser.add_argument("--perceiver-blocks", type=int, default=1)
+    parser.add_argument("--perceiver-self-attn", type=int, default=1)
     parser.add_argument("--per-rank-gen", action="store_true", default=True)
     parser.add_argument("--per-layer-processing", action="store_true", default=True)
     parser.add_argument("--num-pre-head-layers", type=int, default=1)
@@ -64,6 +69,10 @@ def apply_hypernet_config(args):
         "context_chunk_tokens",
         "chunk_merge",
         "max_context_chunks",
+        "hypernet_aggregator",
+        "perceiver_latents",
+        "perceiver_blocks",
+        "perceiver_self_attn",
         "per_rank_gen",
         "per_layer_processing",
         "num_pre_head_layers",
@@ -127,13 +136,19 @@ def chunk_context_ids(document_ids: mx.array, max_context_tokens: int, chunk_tok
     ]
 
 
-def model_embedding_features(model, document_ids, max_context_tokens: int, chunk_tokens: int):
+def model_embedding_features(
+    model,
+    document_ids,
+    max_context_tokens: int,
+    chunk_tokens: int,
+    keep_sequence: bool = False,
+):
     embed = model.model.embed_tokens
     scale = getattr(model.model, "embed_scale", 1.0)
     features = []
     for context_ids in chunk_context_ids(document_ids, max_context_tokens, chunk_tokens):
         embeddings = embed(context_ids[None, :])[0] * scale
-        features.append(mx.mean(embeddings, axis=0))
+        features.append(embeddings if keep_sequence else mx.mean(embeddings, axis=0))
     mx.eval(features)
     return features
 
@@ -149,18 +164,34 @@ def build_hypernet(model, args):
         specs = specs[: args.max_specs]
     if not specs:
         raise ValueError("no target LoRA modules found")
-    hypernet = DocToLoRAHypernetwork(
-        specs,
-        feature_size=model.args.hidden_size,
-        hidden_size=args.hidden_size,
-        rank=args.rank,
-        scale=20.0,
-        per_rank_gen=args.per_rank_gen,
-        per_layer_processing=args.per_layer_processing,
-        num_pre_head_layers=args.num_pre_head_layers,
-        chunk_merge=args.chunk_merge,
-        max_context_chunks=args.max_context_chunks,
-    )
+    if args.hypernet_aggregator == "perceiver":
+        hypernet = PerceiverDocToLoRAHypernetwork(
+            specs,
+            feature_size=model.args.hidden_size,
+            hidden_size=args.hidden_size,
+            rank=args.rank,
+            scale=20.0,
+            num_latents=args.perceiver_latents,
+            num_blocks=args.perceiver_blocks,
+            num_self_attn_per_block=args.perceiver_self_attn,
+            per_layer_processing=args.per_layer_processing,
+            num_pre_head_layers=args.num_pre_head_layers,
+            chunk_merge=args.chunk_merge,
+            max_context_chunks=args.max_context_chunks,
+        )
+    else:
+        hypernet = DocToLoRAHypernetwork(
+            specs,
+            feature_size=model.args.hidden_size,
+            hidden_size=args.hidden_size,
+            rank=args.rank,
+            scale=20.0,
+            per_rank_gen=args.per_rank_gen,
+            per_layer_processing=args.per_layer_processing,
+            num_pre_head_layers=args.num_pre_head_layers,
+            chunk_merge=args.chunk_merge,
+            max_context_chunks=args.max_context_chunks,
+        )
     hypernet.load_weights(args.hypernet, strict=False)
     mx.eval(hypernet.parameters())
     return hypernet, specs
@@ -172,6 +203,7 @@ def generated_loras_for_example(model, hypernet, example: EvalExample, args):
         example.document_ids,
         args.context_max_tokens,
         args.context_chunk_tokens,
+        keep_sequence=args.hypernet_aggregator == "perceiver",
     )
     groups = [hypernet(feature) for feature in features]
     return hypernet.merge_generated_lora_groups(groups)

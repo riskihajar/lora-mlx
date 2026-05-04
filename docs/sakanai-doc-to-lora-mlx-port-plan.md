@@ -10,6 +10,12 @@ The MLX Doc-to-LoRA path is now a runnable Sakana-style hypernetwork prototype r
 document/context tokens -> frozen Gemma embedding context features -> MLX hypernetwork -> generated LoRA A/B tensors -> patched Gemma down_proj modules -> teacher-forced answer loss / internalization eval
 ```
 
+The closer-to-upstream path now also supports a Perceiver-style aggregator:
+
+```text
+document/context token embeddings -> Perceiver latent bottleneck -> output query per target/rank -> generated LoRA A/B tensors -> patched Gemma down_proj modules
+```
+
 Current implementation readiness:
 
 ```text
@@ -42,7 +48,7 @@ Main gaps before claiming full SakanaAI parity or answer-generation quality:
 
 - Free generation remains weak even when teacher-forced internalization improves; current natural-answer outputs can collapse to whitespace or off-target fragments.
 - Exact match remains `0.000` in the reported held-out internalization runs.
-- The context encoder/aggregator is still an MLX approximation (`model-embed`, chunking, learned merge), not the full upstream Perceiver/per-layer activation stack.
+- The context encoder/aggregator is still an MLX approximation, but the implementation now includes a Perceiver-style latent bottleneck option. Full parity still requires matching upstream per-layer activations, multi-block Perceiver details, and merger behavior more closely.
 - Candidate rescoring and doc-span selection are diagnostic only; raw likelihood ranking is not yet a reliable answer-selection method.
 
 Near-term priority order:
@@ -71,7 +77,7 @@ Ordinary LoRA is historical/diagnostic evidence, not condition 4.
 | SakanaAI component | Role | MLX port target |
 | --- | --- | --- |
 | `ctx_encoder.py` | Encodes context using embedding-only, early-exit, or per-layer activations. | Start with a lightweight MLX text/hash encoder for smoke tests, then replace with MLX model activations. |
-| `aggregator.py` | Uses a Perceiver bottleneck to produce outputs per layer, module, and rank. | Add a small MLP/latent aggregator first; replace with Perceiver once generated LoRA training works. |
+| `aggregator.py` | Uses a Perceiver bottleneck to produce outputs per layer, module, and rank. | Perceiver-style MLX bottleneck added for sequence context features; still simplified versus upstream Idefics2Perceiver. |
 | `hypernet.py` | Maps aggregated context features into LoRA matrices for target modules. | Generate `A` and `B` matrices for selected MLX transformer projections. |
 | `lora_layer.py` | Patches model forward calls with generated LoRA tensors. | Add `GeneratedLoRALinear` and model patch helpers for MLX `nn.Linear` modules. |
 | `lora_merger.py` | Combines chunk-level LoRA adapters across document chunks. | Defer until single-context generation works; then add chunk merge/weighted combine. |
@@ -94,6 +100,47 @@ mlx-community/gemma-2-2b-it
 ```
 
 TinyLlama remains useful only as a small local baseline. It should not be treated as the SakanaAI-equivalent target model.
+
+## Perceiver Aggregator Smoke
+
+To reduce the gap with upstream `aggregator.py`, `scripts/train_doc_to_lora_token_smoke.py` now supports:
+
+```text
+--hypernet-aggregator perceiver
+--perceiver-latents
+--perceiver-blocks
+--perceiver-self-attn
+```
+
+This mode keeps context embeddings as a sequence instead of mean-pooling them, then runs a small MLX Perceiver-style latent bottleneck and decoder output queries for target/rank-conditioned LoRA generation.
+
+Safe Sakana/Gemma smoke wrapper:
+
+```bash
+source ~/.zshrc && scripts/train_doc_to_lora_sakana_gemma_perceiver_smoke.sh
+```
+
+Validated smoke on `data/doc_to_lora/sakana_gemma_multi_64.jsonl` with `8` total examples, `2` held out, `1` iteration, Gemma embeddings, `down_proj`, rank `2`, and one target spec:
+
+```text
+initial_loss=13.305789
+final_loss=12.299963
+improvement=1.08x
+initial_eval_loss=12.644643
+final_eval_loss=11.537458
+eval_improvement=1.10x
+```
+
+Reloaded internalization eval of the best checkpoint on the same held-out two examples:
+
+```text
+base_loss=12.796151
+source_context_loss=13.241819
+internalized_loss=11.537458
+internalized_improvement=1.11x
+```
+
+This is a parity/plumbing result, not a quality claim. It shows the MLX Perceiver path can train and reload on a Sakana-style Gemma setup before using thesis data.
 
 ## Dataset Alignment
 

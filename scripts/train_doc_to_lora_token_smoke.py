@@ -15,6 +15,7 @@ from lora_mlx import utils as lora_utils
 from lora_mlx.doc_to_lora import (
     DocToLoRAHypernetwork,
     GeneratedLoRALinear,
+    PerceiverDocToLoRAHypernetwork,
     TokenDocToLoRAHypernetwork,
     infer_lora_module_specs,
     merge_generated_lora_groups,
@@ -59,6 +60,15 @@ def parse_args():
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--context-buckets", type=int, default=4096)
     parser.add_argument("--context-latents", type=int, default=1)
+    parser.add_argument(
+        "--hypernet-aggregator",
+        choices=["mlp", "perceiver"],
+        default="mlp",
+        help="Use the legacy MLP generator or a Sakana-style Perceiver bottleneck.",
+    )
+    parser.add_argument("--perceiver-latents", type=int, default=64)
+    parser.add_argument("--perceiver-blocks", type=int, default=1)
+    parser.add_argument("--perceiver-self-attn", type=int, default=1)
     parser.add_argument(
         "--spec-conditioning",
         action="store_true",
@@ -439,7 +449,13 @@ def chunk_context_ids(document_ids: mx.array, max_context_tokens: int, chunk_tok
     return [document_ids[start : start + chunk_tokens] for start in range(0, len(document_ids), chunk_tokens)]
 
 
-def attach_model_embedding_features(model, examples, max_context_tokens: int, chunk_tokens: int):
+def attach_model_embedding_features(
+    model,
+    examples,
+    max_context_tokens: int,
+    chunk_tokens: int,
+    keep_sequence: bool = False,
+):
     embed = model.model.embed_tokens
     scale = getattr(model.model, "embed_scale", 1.0)
     out = []
@@ -451,7 +467,7 @@ def attach_model_embedding_features(model, examples, max_context_tokens: int, ch
             chunk_tokens,
         ):
             embeddings = embed(context_ids[None, :])[0] * scale
-            features.append(mx.mean(embeddings, axis=0))
+            features.append(embeddings if keep_sequence else mx.mean(embeddings, axis=0))
         document_features = features if len(features) > 1 else features[0]
         out.append(
             TokenExample(
@@ -571,6 +587,10 @@ def save_hypernet_config(
         "max_specs": args.max_specs,
         "num_specs": num_specs,
         "context_encoder": args.context_encoder,
+        "hypernet_aggregator": args.hypernet_aggregator,
+        "perceiver_latents": args.perceiver_latents,
+        "perceiver_blocks": args.perceiver_blocks,
+        "perceiver_self_attn": args.perceiver_self_attn,
         "context_max_tokens": args.context_max_tokens,
         "context_chunk_tokens": args.context_chunk_tokens,
         "chunk_merge": args.chunk_merge,
@@ -634,6 +654,12 @@ def main():
     if args.context_encoder in {"model-embed", "model-activations"}:
         hypernet_feature_size = model.args.hidden_size
 
+    if args.hypernet_aggregator == "perceiver" and args.context_encoder not in {
+        "model-embed",
+        "model-activations",
+    }:
+        raise SystemExit("--hypernet-aggregator perceiver requires model-embed or model-activations")
+
     if args.context_encoder == "token-hash":
         hypernet = TokenDocToLoRAHypernetwork(
             specs,
@@ -647,6 +673,21 @@ def main():
             per_rank_gen=args.per_rank_gen,
             per_layer_processing=args.per_layer_processing,
             num_pre_head_layers=args.num_pre_head_layers,
+        )
+    elif args.hypernet_aggregator == "perceiver":
+        hypernet = PerceiverDocToLoRAHypernetwork(
+            specs,
+            feature_size=hypernet_feature_size,
+            hidden_size=args.hidden_size,
+            rank=args.rank,
+            scale=20.0,
+            num_latents=args.perceiver_latents,
+            num_blocks=args.perceiver_blocks,
+            num_self_attn_per_block=args.perceiver_self_attn,
+            per_layer_processing=args.per_layer_processing,
+            num_pre_head_layers=args.num_pre_head_layers,
+            chunk_merge=args.chunk_merge,
+            max_context_chunks=args.max_context_chunks,
         )
     else:
         hypernet = DocToLoRAHypernetwork(
@@ -679,6 +720,7 @@ def main():
             examples,
             args.context_max_tokens,
             args.context_chunk_tokens,
+            keep_sequence=args.hypernet_aggregator == "perceiver",
         )
     if args.context_encoder == "model-activations":
         examples = attach_model_activation_features(
@@ -765,6 +807,10 @@ def main():
     print(f"loss_scope={args.loss_scope}")
     print(f"loss_type={args.loss_type}")
     print(f"context_encoder={args.context_encoder}")
+    print(f"hypernet_aggregator={args.hypernet_aggregator}")
+    print(f"perceiver_latents={args.perceiver_latents}")
+    print(f"perceiver_blocks={args.perceiver_blocks}")
+    print(f"perceiver_self_attn={args.perceiver_self_attn}")
     print(f"context_latents={args.context_latents}")
     print(f"context_max_tokens={args.context_max_tokens}")
     print(f"context_chunk_tokens={args.context_chunk_tokens}")
