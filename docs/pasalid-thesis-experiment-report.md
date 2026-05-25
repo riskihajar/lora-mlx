@@ -87,6 +87,52 @@ Makna tambahan natural legal QA:
 - Copy-rate berbasis source masih perlu dikendalikan: `D` lebih rendah daripada `B` pada `copy_run_gt_10_rate`, tetapi tetap ada sekitar `17-33%` output yang terlalu extractive.
 - Review pairwise LLM pada `30` seen dan `30` unseen menunjukkan `D` lebih kuat pada source traceability dan naturalness; setelah targeted transition augmentation, `D` menang overall pada seen dan unseen.
 
+## Path 2: Sakana D2L Upstream Baseline
+
+Selain pendekatan ordinary LoRA dan generated-LoRA MLX yang sudah dievaluasi di atas, tesis ini juga menjalankan **upstream `SakanaAI/doc-to-lora`** sebagai pembanding eksternal. Repo upstream `git@github.com:SakanaAI/doc-to-lora.git` dijalankan apa adanya di Hugging Face Jobs (CUDA), dengan data Pasal.id dari split `json_native_expanded_clean_split` (split yang sama dengan eksperimen MLX di atas).
+
+Detail eksekusi:
+
+- Job ID: `6a13ad63f17429a271eebf25` (full 177 row), tag `full_177`
+- Flavor HF Jobs: `a10g-small` (provisioned A100-80GB)
+- Checkpoint: `SakanaAI/doc-to-lora/gemma_demo/checkpoint-80000`
+- Base model: `google/gemma-2-2b-it`
+- LoRA target: `down_proj`, rank `8`
+- Inference protocol: untuk setiap dokumen unik (`source_doc`), `model.reset()` lalu `model.internalize(doc)` sekali, lalu generate semua pertanyaan yang menargetkan dokumen tersebut tanpa konteks dokumen di prompt.
+- Wall clock: ~22 menit total (`433s` test_seen + `348s` test_unseen + setup)
+- Estimasi biaya: ~`$0.40`
+- Output predictions: `outputs/predictions/pasalid_d2l_cloud/full_177/`
+- Tooling: `cloud/build_pasalid_d2l_eval.py`, `cloud/eval_pasalid_d2l.sh`, `cloud/score_pasalid_d2l.py`.
+
+Hasil pada split native-expanded clean:
+
+| Split | Rows | Docs | Answer F1 | Answer EM | Source overlap | Internalize median (s) | Generate median (s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| test_seen | 89 | 67 | 0.3231 | 0.0337 | 0.3740 | 1.00 | 2.53 |
+| test_unseen | 88 | 26 | 0.2920 | 0.0114 | 0.3149 | 1.01 | 2.48 |
+
+Perbandingan langsung pada split clean yang sama (TinyLlama dari eksperimen MLX di atas vs Sakana D2L upstream):
+
+| Split | A (no doc, no adapter) | B (with doc, no adapter) | C TinyLlama (LoRA, no doc) | D TinyLlama (LoRA + doc) | Sakana D2L upstream (no doc) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| seen | 0.2618 | 0.4125 | 0.2617 | 0.6518 | 0.3231 |
+| unseen | 0.2720 | 0.3388 | 0.2210 | 0.4414 | 0.2920 |
+
+Interpretasi:
+
+- **Sakana D2L mengungguli ordinary-LoRA `C` pada kondisi yang sama** (no doc, hanya adapter): `+0.06` F1 pada seen dan `+0.07` F1 pada unseen. Ini sinyal bahwa pendekatan hypernetwork-generated adapter memang lebih kuat daripada fine-tuning LoRA per-document tradisional untuk internalisasi parametrik.
+- **Sakana D2L masih jauh di bawah `B` dan `D`** yang menyertakan dokumen sumber di prompt. Konteks eksplisit tetap pendekatan terkuat untuk kualitas jawaban; D2L belum menggantikan retrieval, baru menjadi pengganti yang lebih baik untuk skenario tanpa konteks.
+- **Source/citation tetap lemah**. `Source overlap` di rentang `0.31-0.37` karena adapter Sakana tidak dilatih dengan format JSON `answer + source` Pasal.id. Output Bahasa Indonesia natural, tetapi tidak terstruktur dan jarang menyebut nomor UU/pasal yang konsisten dengan referensi gold.
+- **EM hampir nol** wajar: adapter Sakana dilatih pada SQuAD/PWC/DROP/ROPES Bahasa Inggris, sehingga tidak akan match exact ke target JSON. F1 token-overlap lebih informatif untuk kondisi ini.
+- **Generalisasi lintas bahasa nyata**. Walaupun training data adapter berbahasa Inggris, output Pasal.id konsisten Bahasa Indonesia, mengangkat fakta dari dokumen yang baru di-internalize, dan strukturnya rapi. Beberapa halu masih muncul (misal nomor UU yang dibuat-buat), tetapi mayoritas jawaban faithfully mengangkat isi pasal.
+- **Latency rendah**. Internalize ~1 detik per dokumen pendek (median panjang dokumen <500 karakter), generate ~2.5 detik. Cost dominasi setup (download checkpoint, install upstream stack), bukan inference.
+
+Implikasi untuk tesis:
+
+- Sakana D2L upstream berfungsi sebagai **ground-truth pembanding** untuk port MLX hypernetwork: angka F1 di atas adalah benchmark eksternal yang harus dikejar oleh implementasi MLX-mu pada split yang sama.
+- Klaim tesis bisa diperkuat: ordinary-LoRA gagal sebagai memory adapter (`C ≈ A`), tetapi hypernetwork-based D2L jelas mengangkat F1 di atas baseline `A` dan ordinary `C`. Ini memvalidasi arah riset hypernetwork untuk Pasal.id.
+- Gap source traceability adalah area kontribusi: D2L upstream tidak men-target citation Indonesia, sehingga port MLX yang dilatih dengan format JSON Pasal.id punya peluang menutup gap ini.
+
 ## Hasil Utama Historis dan Ablasi
 
 ### TinyLlama pada format JSON `answer + source`

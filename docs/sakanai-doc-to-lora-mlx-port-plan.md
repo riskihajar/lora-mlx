@@ -1,6 +1,169 @@
 # SakanaAI Doc-to-LoRA MLX Port Plan
 
-This document tracks the target for a native MLX port of SakanaAI-style Doc-to-LoRA (D2L). It is intentionally stricter than the current document-specific LoRA baseline.
+This document tracks the target for running SakanaAI-style Doc-to-LoRA (D2L) on Apple Silicon, with the MLX-native port as the primary path and an upstream PyTorch + MPS run as the comparison path.
+
+Upstream reference: `git@github.com:SakanaAI/doc-to-lora.git`.
+
+## Two Paths To Apple Silicon
+
+The shared goal is to get Doc-to-LoRA running on the local Mac M4 (Apple Silicon, Metal). MLX and PyTorch+MPS are simply two ways to reach the same destination:
+
+- **Path 1 — MLX-native port** (primary, thesis path): reimplement the Sakana D2L architecture in MLX, train on Apple Silicon, evaluate against Pasal.id data. The rest of this document describes this path in detail.
+- **Path 2 — Upstream PyTorch + MPS run** (comparison path): run the original `SakanaAI/doc-to-lora` repo as-is on Mac M4 with minimum architectural patches, mostly inference-only from the pre-trained checkpoints. This serves as a behavioral ground truth: if upstream produces sensible answers on the Mac, we have a reliable baseline to compare the MLX port against.
+
+The two paths share the same target model (`google/gemma-2-2b-it`), the same task (document internalization), and the same evaluation data (Pasal.id legal QA, eventually). They differ only in framework and how much of the upstream code is reused.
+
+### Path 2 Scope: Upstream PyTorch + MPS
+
+The upstream repo at `git@github.com:SakanaAI/doc-to-lora.git` is written for **CUDA Linux x86_64** (`pyproject.toml` + `install.sh`). Running it on Mac M4 requires a small amount of patching, but no rewrites of the hypernetwork, aggregator, lora layer, or merger logic.
+
+#### Target Mac
+
+| Item | Value |
+| --- | --- |
+| Chip | Apple M4 |
+| Memory | 24 GB unified |
+| OS | macOS 15.7.1 (Darwin 24.6) |
+| Architecture | `arm64` |
+| Python | `3.11.14` (pyenv) |
+| GPU stack | no CUDA, Metal/MPS available |
+
+#### Upstream Compatibility Table
+
+| Upstream component | Status on Mac M4 |
+| --- | --- |
+| `torch==2.6.0` cu124 build | not available; use default torch (MPS/CPU) |
+| `flash-attn` cu12 cp310 linux x86_64 wheel | no macOS arm64 build |
+| `flashinfer-python==0.2.2` cu124 | CUDA only |
+| `bitsandbytes>=0.46.1` | CUDA only; QLoRA path unavailable |
+| `vllm==0.8.5.post1` | not relevant for inference here |
+| `deepspeed==0.17.1` | not relevant for inference here |
+| `liger-kernel` | CUDA only |
+| `accelerate_config.yaml` (8 GPU) | not relevant for single-Mac run |
+| `hypernet.py:400` `torch.autocast(device_type="cuda", ...)` | hardcoded CUDA |
+| `aggregator.py` `attn_implementation="flash_attention_2"` | hardcoded flash-attn |
+| `idefics2.py` `assert self._use_flash_attention_2` | will not pass on Mac |
+| `train.py` `--num_processes=8 --max_steps=80000` | upstream training infeasible on Mac M4 |
+
+#### Feasibility
+
+- **Training upstream end-to-end**: not realistic on Mac M4. The official config is 8 GPUs × 80k steps with flash-attn and deepspeed. Ruled out.
+- **Inference from pre-trained `SakanaAI/doc-to-lora` checkpoints**: feasible with minimum patching. Estimated footprint for `gemma-2-2b-it` bf16 around `5 GB` plus the hypernetwork around `<2 GB`, comfortable within 24 GB unified memory.
+
+Path 2 is therefore scoped as **inference-only first**, using Hugging Face pre-trained checkpoints from Sakana.
+
+#### Minimum Architectural Patches
+
+Only device routing and attention implementation. No changes to the hypernetwork, aggregator, lora layer, or merger logic.
+
+1. **Device routing in `model_loading.py`**: replace `device_map="cuda"` default with auto-detect (`mps` if available, fallback `cpu`); drop the `use_q_lora` (bitsandbytes) path on Mac; keep function signatures stable.
+2. **Attention implementation**: replace `flash_attention_2` with `eager` (or `sdpa` where supported) in:
+   - `src/ctx_to_lora/model_loading.py` (default `attn_implementation`)
+   - `src/ctx_to_lora/modeling/aggregator.py` lines `115` and `125`
+   - `src/ctx_to_lora/modeling/idefics2.py:615` `assert self._use_flash_attention_2` lowered to a runtime config, or avoid that path entirely for Gemma text inference.
+3. **Autocast device in `hypernet.py`**: `torch.autocast(device_type="cuda", dtype=torch.bfloat16)` becomes device-aware. On `mps`, prefer `float32` or `float16` since bf16 autocast on MPS is not fully stable. On `cpu`, use `device_type="cpu", dtype=torch.bfloat16`.
+4. **Literal `.to("cuda")` calls**: `src/ctx_to_lora/modeling/text_to_lora.py` has `ctx_ids = {k: v.to("cuda") ...}` and `input_ids = {k: v.to("cuda") ...}`. Replace with the runtime device variable.
+5. **Demo `demo/app.py`**: already uses `torch.device("cuda" if torch.cuda.is_available() else "cpu")` and `torch.amp.autocast(str(device))`. Add `mps` detection. After the patches above, the demo should run.
+
+No changes are needed in the Perceiver core in `aggregator.py`, the head in `hypernet.py`, `lora_layer.py`, or `lora_merger.py`.
+
+#### Mac Dependency Subset
+
+A separate Python environment is recommended at `/Users/riskihajar/github/doc-to-lora/.venv` to avoid mixing the MLX stack used by `lora-mlx` with the PyTorch stack used here.
+
+Kept (subset of upstream `pyproject.toml`):
+
+```text
+torch              # default build (MPS/CPU), not cu124
+transformers==4.51.3
+accelerate==1.6.0
+datasets==3.6.0
+peft
+einops
+jaxtyping
+torchmetrics
+inflect
+rouge-score
+huggingface-hub[hf-transfer]>=0.32.0
+gradio>=4.40.0
+matplotlib
+pandas
+plotly
+tensorboardX
+wonderwords>=2.2.0
+```
+
+Dropped on Mac:
+
+```text
+flash-attn
+flashinfer-python
+bitsandbytes
+vllm
+deepspeed
+liger-kernel
+fasttext-wheel
+llmlingua            # optional, not used for basic inference
+google-cloud-storage # optional
+kagglehub, kaggle    # optional
+```
+
+`hf_transfer` is kept for fast checkpoint downloads.
+
+#### Execution Plan
+
+1. **External prerequisites**
+   - `huggingface-cli login` and accept the Gemma 2 license at the HF model page; otherwise loading fails.
+2. **Bootstrap environment**
+   - Create venv `python 3.11` at `doc-to-lora/.venv` and install the Mac dependency subset above.
+   - Do **not** run upstream `install.sh`; it forces cu124, flash-attn, and flashinfer.
+3. **Apply minimum architectural patches**
+   - Optional helper: a small `src/ctx_to_lora/_mac_compat.py` returning safe device + attention impl.
+   - Patch the five points listed above. No numerical behavior changes beyond device + attention.
+4. **Pull pre-trained checkpoint**
+   - `huggingface-cli download SakanaAI/doc-to-lora --local-dir trained_d2l --include "*/"`.
+   - At minimum, get one checkpoint folder (e.g. `gemma_demo`) for the smoke test.
+5. **Inference smoke test**
+   - Reproduce the README flow: `ModulatedPretrainedModel.from_state_dict`, `model.internalize(doc)`, `model.generate(...)`.
+   - Start with a short document such as `data/sakana_wiki.txt`.
+   - Verify the model answers questions whose facts only exist in the document.
+6. **Optional Gradio demo**
+   - After CLI smoke test passes, run `demo/app.py` with `mps` detection added.
+7. **Optional Pasal.id integration**
+   - Use documents from `data/pasalid_raw/` as `internalize` inputs.
+   - Compare upstream D2L outputs against the existing A/B/C/D conditions in `lora-mlx` (see `docs/pasalid-thesis-experiment-report.md`).
+   - Record results in a separate report (e.g. `docs/sakanai-doc-to-lora-upstream-pasalid-eval.md`) so execution results do not pollute this plan.
+
+#### Risks and Mitigations
+
+- **MPS bfloat16 instability**: some autocast bf16 ops on MPS are not stable. On NaN or error, fall back to `float32` on MPS, or move to CPU (slower but stable).
+- **24 GB memory ceiling**: if Gemma 2-2b-it bf16 plus hypernet plus long context exceeds budget, reduce `max_new_tokens`, cap context length, or run on CPU.
+- **Flash-attn assert in `idefics2.py`**: `assert self._use_flash_attention_2` will trigger if that path is reached. For Gemma text inference, it normally is not. If forced, a small refactor or path avoidance is needed.
+- **Gated Gemma access**: without HF license approval, every step fails at model load.
+- **Torch version drift**: upstream pins `torch==2.6.0`. On Mac use the latest stable that ships MPS. If small API differences appear, pin to a known-good macOS arm64 version.
+
+#### Path 2 Status
+
+- Type: execution plan, **validated on HF Jobs cloud** (Path 2 cloud track).
+- Validation run: job `6a13a29e404eb93b204f1095`, flavor `a10g-small` (provisioned A100-80GB), wall clock ~4 minutes, cost ~$0.07.
+- Result: upstream `SakanaAI/doc-to-lora` `gemma_demo/checkpoint-80000` produces clearly document-grounded answers on `data/sakana_wiki.txt` after `model.internalize(doc)`, while baseline answers without the adapter are hallucinated. Hypernetwork internalization works as intended.
+- The Mac M4 local track (`/Users/riskihajar/github/doc-to-lora/.venv` + minimum patches) is feasible up to model build but exceeds 24 GB unified memory at internalize time because `quantize_ctx_encoder=True` cannot be honored without bitsandbytes. Local track is paused; cloud is the validated path.
+- See `cloud/README.md` for the launch tooling and `cloud/validate_sakana_upstream.sh` for the entry point.
+
+### Post-Validation Optimization Track
+
+Once Path 2 is validated (upstream Sakana checkpoint runs end-to-end on Mac M4 and produces sensible Pasal.id outputs), the next problem is bringing those weights or that behavior closer to MLX so the thesis path benefits from upstream signal.
+
+Key decision recorded here so it is not forgotten:
+
+- A direct "convert `pytorch_model.bin` to MLX `.npz`" is mechanically possible but **not useful by itself**. Loading the converted tensors requires MLX classes that match the upstream module structure (Idefics2Perceiver aggregator, ModulatedPretrainedModel hypernetwork, GeneratedLoRALinear, lora_merger). The current `lora-mlx` port is an approximation, not a layer-level parity rebuild, so upstream weights will not load cleanly.
+- Practical options after Path 2 validation, in increasing effort:
+  1. **Behavioral comparison**: use Path 2 outputs on Pasal.id documents as ground truth references; score the existing MLX port against them and identify where the MLX port diverges most.
+  2. **Targeted parity rebuild**: pick the MLX port modules with the largest behavioral gap and rebuild them to match the upstream class structure exactly, then convert only those parameter blocks.
+  3. **Warm-start / distillation**: use the upstream model as a teacher to fine-tune or distill into the MLX port, avoiding direct weight transfer entirely.
+- Effort budget for full layer-level parity rebuild plus weight mapping: roughly 2-4 weeks of focused work; this overlaps heavily with finishing Path 1 to true parity, so it should be tracked there rather than as a separate "conversion" workstream.
+
+This section should be revisited and turned into a concrete optimization plan only after Path 2 produces validated outputs.
 
 ## Current Status Snapshot
 
